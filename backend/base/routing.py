@@ -1,6 +1,7 @@
+# routing.py
 from django.urls import path
-from . import consumers
+from .consumers import HubChatConsumer
 
 websocket_urlpatterns = [
-    path("ws/hub/<int:hub_id>/", consumers.HubConsumer.as_asgi()),
+    path("ws/hub/<int:hub_id>/", HubChatConsumer.as_asgi()),
 ]

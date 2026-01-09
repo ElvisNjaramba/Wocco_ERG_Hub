@@ -8,3 +8,4 @@ authentication_router.register("users", SuperUserDashboardViewSet, basename="use
 authentication_router.register("profile", ProfileViewSet, basename="profile")
 
 urlpatterns = authentication_router.urls
+

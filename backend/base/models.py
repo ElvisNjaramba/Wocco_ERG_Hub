@@ -25,9 +25,17 @@ class Message(models.Model):
     hub = models.ForeignKey(Hub, on_delete=models.CASCADE, related_name="messages")
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
     content = models.TextField(blank=True, null=True)
+    parent = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        related_name="replies",
+        on_delete=models.CASCADE
+    )
+
+    timestamp = models.DateTimeField(auto_now_add=True)
     media = models.FileField(upload_to="hub_media/", blank=True, null=True)
     audio = models.FileField(upload_to="hub_audio/", blank=True, null=True)
-    timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.sender.username} @ {self.hub.name}"

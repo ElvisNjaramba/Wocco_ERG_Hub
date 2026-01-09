@@ -1,11 +1,20 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+
 import Login from "./auth/Login";
 import SuperUserRegister from "./auth/SuperUserRegister";
+import ProtectedRoute from "./auth/ProtectedRoute";
+
 import SuperUserDashboard from "./pages/SuperUserDashboard";
 import UserDashboard from "./pages/UserDashboard";
 import Profile from "./pages/Profile";
 import { ChangePassword } from "./pages/Password";
-import ProtectedRoute from "./auth/ProtectedRoute";
+import HubsList from "./pages/HubsList";
+import HubRequests from "./pages/HubRequests";
+import HubDetails from "./pages/HubDetails";
+import HubChat from "./pages/HubChat";
+
+
+
 
 export default function App() {
   return (
@@ -46,6 +55,30 @@ export default function App() {
           element={
             <ProtectedRoute>
               <UserDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/hubs/list"
+          element={
+            <ProtectedRoute>
+              <HubsList />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/hubs/:hubId"
+          element={
+            <ProtectedRoute>
+              <HubDetails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/hub/request"
+          element={
+            <ProtectedRoute>
+              <HubsList />
             </ProtectedRoute>
           }
         />

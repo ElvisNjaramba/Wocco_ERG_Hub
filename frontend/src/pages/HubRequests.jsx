@@ -3,30 +3,49 @@ import api from "../api/axios";
 
 export default function HubRequests({ hubId }) {
   const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const fetchRequests = async () => {
-    const res = await api.get("/hub-memberships/"); // backend returns memberships for this hub
-    const pending = res.data.filter((r) => r.hub.id === hubId && !r.is_approved);
-    setRequests(pending);
+    try {
+      const res = await api.get(`/hubs/${hubId}/pending_requests/`);
+      setRequests(res.data);
+    } catch (err) {
+      console.error("Failed to load requests", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const approveUser = async (userId) => {
-    await api.post(`/hubs/${hubId}/approve_member/`, { user_id: userId });
-    alert("User approved");
+    await api.post(`/hubs/${hubId}/approve_member/`, {
+      user_id: userId,
+    });
     fetchRequests();
   };
 
   useEffect(() => {
     fetchRequests();
-  }, []);
+  }, [hubId]);
+
+  if (loading) return <p>Loading requests...</p>;
+
+  if (requests.length === 0) {
+    return <p>No pending requests</p>;
+  }
 
   return (
     <div>
       <h2>Pending Join Requests</h2>
+
       {requests.map((r) => (
-        <div key={r.id}>
-          <span>{r.user}</span>
-          <button onClick={() => approveUser(r.user_id)}>Approve</button>
+        <div key={r.id} style={{ marginBottom: 8 }}>
+          <span>{r.username}</span>
+          <button
+            style={{ marginLeft: 10 }}
+            onClick={() => approveUser(r.user_id)}
+          >
+            Approve
+          </button>
         </div>
       ))}
     </div>

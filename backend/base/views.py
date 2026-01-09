@@ -1,14 +1,19 @@
 from rest_framework.viewsets import ViewSet
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework import viewsets
 
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.core.exceptions import PermissionDenied
+
+from rest_framework.decorators import action, api_view, permission_classes
+
 from .models import Hub, HubMembership, Message
-from .serializers import HubSerializer, HubMembershipSerializer, MessageSerializer
+from .serializers import HubDetailSerializer, HubSerializer, HubMembershipSerializer, MessageSerializer
 from django.utils import timezone
+
+
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 class DashboardViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
@@ -24,6 +29,17 @@ class HubViewSet(viewsets.ModelViewSet):
     queryset = Hub.objects.all()
     serializer_class = HubSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+    
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return HubDetailSerializer
+        return HubSerializer
+
 
     def perform_create(self, serializer):
         # Only superuser can create hubs
@@ -41,6 +57,22 @@ class HubViewSet(viewsets.ModelViewSet):
         if not created:
             return Response({"message": "Already requested or member"}, status=400)
         return Response({"message": "Join request sent"}, status=201)
+    
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
+    def pending_requests(self, request, pk=None):
+        hub = self.get_object()
+
+        # only admin can see requests
+        if hub.admin != request.user:
+            return Response({"error": "Not allowed"}, status=403)
+
+        memberships = HubMembership.objects.filter(
+            hub=hub,
+            is_approved=False
+        )
+
+        serializer = HubMembershipSerializer(memberships, many=True)
+        return Response(serializer.data)
 
     @action(detail=True, methods=["post"])
     def approve_member(self, request, pk=None):
@@ -75,6 +107,28 @@ class MessageViewSet(viewsets.ModelViewSet):
             hub=hub, user=self.request.user, is_approved=True
         ).first()
         if not membership:
-            return Response({"error": "You are not a member of this hub"}, status=403)
+            raise PermissionDenied("You are not a member of this hub")
 
-        serializer.save(sender=self.request.user, hub=hub)
+        message = serializer.save(sender=self.request.user, hub=hub)
+
+        # 🔥 BROADCAST TO WEBSOCKET
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"hub_{hub_id}",
+            {
+                "type": "chat.message",
+                "message": MessageSerializer(
+                    message,
+                    context={"request": self.request}
+                ).data,
+            }
+        )
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def me(request):
+    return Response({
+        "id": request.user.id,
+        "username": request.user.username,
+        "is_superuser": request.user.is_superuser,
+    })

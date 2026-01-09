@@ -19,6 +19,7 @@ urlpatterns = [
 
     # 🔥 API ROUTES
     path("api/", include(router.urls)),
+    path('api/', include('base.urls')),
 
     # 🔐 JWT AUTH
     path("api/auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),

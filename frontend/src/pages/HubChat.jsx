@@ -25,11 +25,18 @@ const buildTree = (messages) => {
 };
 
 const MessageItem = ({ msg, onReply }) => (
-  <div style={{ marginLeft: msg.parent_id ? 20 : 0, marginBottom: 10 }}>
+  <div
+    style={{
+      marginLeft: msg.parent_id ? 24 : 0,
+      marginBottom: 12,
+      paddingLeft: msg.parent_id ? 8 : 0,
+      borderLeft: msg.parent_id ? "2px solid #eee" : "none",
+    }}
+  >
     <strong>{msg.sender}</strong>: {msg.content}
 
     {msg.media_url && (
-      <div style={{ marginTop: 4 }}>
+      <div style={{ marginTop: 6 }}>
         {isImage(msg.media_url) ? (
           <img src={msg.media_url} style={{ maxWidth: 200 }} />
         ) : (
@@ -40,7 +47,7 @@ const MessageItem = ({ msg, onReply }) => (
       </div>
     )}
 
-    <div style={{ fontSize: 12 }}>
+    <div style={{ fontSize: 12, marginTop: 4 }}>
       <button onClick={() => onReply(msg.id)}>Reply</button>
     </div>
 
@@ -56,7 +63,6 @@ export default function HubChat({ hubId }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
-  const [connected, setConnected] = useState(false);
 
   const socketRef = useRef(null);
   const token = localStorage.getItem("access");
@@ -70,128 +76,74 @@ export default function HubChat({ hubId }) {
     });
   }, [hubId]);
 
-  /* ⚡ WEBSOCKET */
-useEffect(() => {
-  if (!hubId || !token) return;
+  /* ⚡ WEBSOCKET (receive only) */
+  useEffect(() => {
+    if (!hubId || !token) return;
 
-  // ⛔ prevent duplicate sockets (StrictMode safe)
-  if (
-    socketRef.current &&
-    socketRef.current.readyState !== WebSocket.CLOSED
-  ) {
-    return;
-  }
-
-  const ws = new WebSocket(
-    `ws://127.0.0.1:8000/ws/hub/${hubId}/?token=${token}`
-  );
-
-  socketRef.current = ws;
-
-  ws.onopen = () => {
-    console.log("✅ WS connected");
-    setConnected(true);
-  };
-
-  ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-
-    if (data.type === "chat_message") {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === data.message.id)) return prev;
-        return [...prev, data.message];
-      });
+    if (
+      socketRef.current &&
+      socketRef.current.readyState !== WebSocket.CLOSED
+    ) {
+      return;
     }
-  };
 
-  ws.onerror = (e) => {
-    console.error("WS error", e);
-  };
+    const ws = new WebSocket(
+      `ws://127.0.0.1:8000/ws/hub/${hubId}/?token=${token}`
+    );
 
-  ws.onclose = () => {
-    console.log("❌ WS closed");
-    setConnected(false);
-    socketRef.current = null;
-  };
+    socketRef.current = ws;
 
-  // ⚠️ IMPORTANT: do NOT close immediately in StrictMode
-  return () => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.close();
-    }
-  };
-}, [hubId, token]);
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
 
+      if (data.type === "chat_message") {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.message.id)) return prev;
+          return [...prev, data.message];
+        });
+      }
+    };
 
-const sendMessage = async () => {
-  // 🧱 guard
-  if (!text.trim() && !file) return;
+    ws.onclose = () => {
+      socketRef.current = null;
+    };
 
-  /* ---------- MEDIA MESSAGE (REST) ---------- */
-  if (file) {
-    const tempId = Date.now(); // optimistic id
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+    };
+  }, [hubId, token]);
 
-    // 👀 optimistic UI
+  /* 🚀 SEND MESSAGE (REST authoritative) */
+  const sendMessage = async () => {
+    if (!text.trim() && !file) return;
+
+    const tempId = Date.now();
+
+    // optimistic UI
     setMessages((prev) => [
       ...prev,
       {
         id: tempId,
         sender: "You",
         content: text,
-        media_url: URL.createObjectURL(file),
+        media_url: file ? URL.createObjectURL(file) : null,
         parent_id: replyTo,
-        replies: [],
         timestamp: new Date().toISOString(),
       },
     ]);
 
     const form = new FormData();
     form.append("hub", hubId);
-    form.append("content", text);
-    form.append("media", file);
+    if (text) form.append("content", text);
+    if (file) form.append("media", file);
     if (replyTo) form.append("parent", replyTo);
 
     await api.post("/messages/", form);
 
-    setFile(null);
     setText("");
+    setFile(null);
     setReplyTo(null);
-    return;
-  }
-
-  /* ---------- TEXT MESSAGE (WS) ---------- */
-  if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-    console.warn("Socket not ready");
-    return;
-  }
-
-  const tempId = Date.now(); // optimistic id
-
-  // 👀 optimistic UI
-  setMessages((prev) => [
-    ...prev,
-    {
-      id: tempId,
-      sender: "You",
-      content: text,
-      media_url: null,
-      parent_id: replyTo,
-      replies: [],
-      timestamp: new Date().toISOString(),
-    },
-  ]);
-
-  socketRef.current.send(
-    JSON.stringify({
-      content: text,
-      parent: replyTo,
-    })
-  );
-
-  setText("");
-  setReplyTo(null);
-};
-
+  };
 
   const threaded = buildTree(messages);
 
@@ -211,9 +163,9 @@ const sendMessage = async () => {
       </div>
 
       {replyTo && (
-        <div style={{ fontSize: 12 }}>
+        <div style={{ fontSize: 12, marginTop: 6 }}>
           Replying to message #{replyTo}
-          <button onClick={() => setReplyTo(null)}>✕</button>
+          <button onClick={() => setReplyTo(null)}> ✕</button>
         </div>
       )}
 
@@ -221,14 +173,18 @@ const sendMessage = async () => {
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Type message"
+        style={{ width: "100%", marginTop: 8 }}
       />
 
-      <input type="file" onChange={(e) => setFile(e.target.files[0])} />
+      <input
+        type="file"
+        onChange={(e) => setFile(e.target.files[0])}
+        style={{ marginTop: 6 }}
+      />
 
-<button disabled={!connected} onClick={sendMessage}>
-  {connected ? "Send" : "Connecting..."}
-</button>
-
+      <button onClick={sendMessage} style={{ marginTop: 6 }}>
+        Send
+      </button>
     </div>
   );
 }

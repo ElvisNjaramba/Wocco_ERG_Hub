@@ -1,93 +1,80 @@
-from urllib.parse import parse_qs
-from django.contrib.auth.models import AnonymousUser
-
-from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from .models import Hub, Message
-
-from .serializers import MessageSerializer
+import json
+from django.core.exceptions import PermissionDenied
+from .models import HubMembership, Message
 
 
-class HubChatConsumer(AsyncJsonWebsocketConsumer):
+class HubChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.hub_id = self.scope["url_route"]["kwargs"]["hub_id"]
-        self.room_group_name = f"hub_{self.hub_id}"
-
-        # 🔑 Extract token
-        query = parse_qs(self.scope["query_string"].decode())
-        token = query.get("token", [None])[0]
-
-        if not token:
-            await self.close()
-            return
-
-        # 🔑 Authenticate user manually
-        jwt_auth = JWTAuthentication()
-        try:
-            validated = jwt_auth.get_validated_token(token)
-            self.user = jwt_auth.get_user(validated)
-        except Exception:
-            await self.close()
-            return
+        self.user = self.scope["user"]
 
         if not self.user or self.user.is_anonymous:
             await self.close()
             return
 
-        self.scope["user"] = self.user
+        is_member = await self.is_approved_member()
+        if not is_member:
+            await self.close()
+            return
 
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
-
+        self.room_group_name = f"hub_{self.hub_id}"
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
     async def disconnect(self, close_code):
-        if hasattr(self, "room_group_name"):
-            await self.channel_layer.group_discard(
+        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+            content = data.get("content")
+            parent_id = data.get("parent")
+
+            if not content:
+                return
+
+            msg = await self.save_message(content, parent_id)
+
+            await self.channel_layer.group_send(
                 self.room_group_name,
-                self.channel_name
+                {
+                    "type": "chat_message",
+                    "message": {
+                        "id": msg.id,
+                        "sender": msg.sender.username,
+                        "content": msg.content,
+                        "parent_id": msg.parent_id,
+                        "timestamp": msg.timestamp.isoformat(),
+                    },
+                }
             )
+        except Exception as e:
+            print("🔥 WS ERROR:", e)
 
-    async def receive_json(self, content):
-        text = content.get("content", "").strip()
-        parent_id = content.get("parent")
-
-        if not text:
-            return
-
-        message = await self.create_message(text, parent_id)
-        serialized = MessageSerializer(
-            message,
-            context={"request": None}  # 👈 add context
-        ).data
-
-
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                "type": "chat.message",
-                "message": serialized,
-            }
-        )
 
     async def chat_message(self, event):
-        await self.send_json({
+        await self.send(text_data=json.dumps({
             "type": "chat_message",
             "message": event["message"]
-        })
+        }))
 
     @database_sync_to_async
-    def create_message(self, text, parent_id):
-        hub = Hub.objects.get(id=self.hub_id)
-        parent = Message.objects.filter(id=parent_id).first()
+    def is_approved_member(self):
+        return HubMembership.objects.filter(
+            hub_id=self.hub_id,
+            user=self.user,
+            is_approved=True
+        ).exists()
 
+    @database_sync_to_async
+    def save_message(self, content, parent_id=None):
         return Message.objects.create(
-            hub=hub,
+            hub_id=self.hub_id,
             sender=self.user,
-            content=text,
-            parent=parent,
+            content=content,
+            parent_id=parent_id,
         )
+

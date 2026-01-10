@@ -59,9 +59,9 @@ class HubMembershipSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    sender = serializers.StringRelatedField()
+    sender = serializers.StringRelatedField(read_only=True)
+    media = serializers.FileField(required=False, allow_null=True)
     media_url = serializers.SerializerMethodField()
-    replies = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -69,9 +69,9 @@ class MessageSerializer(serializers.ModelSerializer):
             "id",
             "sender",
             "content",
+            "media",
             "media_url",
             "parent_id",
-            "replies",
             "timestamp",
         ]
 

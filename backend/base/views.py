@@ -11,7 +11,7 @@ from .models import Hub, HubMembership, Message
 from .serializers import HubDetailSerializer, HubSerializer, HubMembershipSerializer, MessageSerializer
 from django.utils import timezone
 
-
+from rest_framework.parsers import MultiPartParser, FormParser
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
@@ -92,6 +92,7 @@ class HubViewSet(viewsets.ModelViewSet):
         return Response({"message": "User approved"}, status=200)
 
 class MessageViewSet(viewsets.ModelViewSet):
+    parser_classes = [MultiPartParser, FormParser]
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
 
@@ -104,25 +105,32 @@ class MessageViewSet(viewsets.ModelViewSet):
         hub = Hub.objects.get(id=hub_id)
 
         membership = HubMembership.objects.filter(
-            hub=hub, user=self.request.user, is_approved=True
-        ).first()
+            hub=hub,
+            user=self.request.user,
+            is_approved=True
+        ).exists()
+
         if not membership:
-            raise PermissionDenied("You are not a member of this hub")
+            raise PermissionDenied("Not a hub member")
 
-        message = serializer.save(sender=self.request.user, hub=hub)
+        message = serializer.save(
+            sender=self.request.user,
+            hub=hub
+        )
 
-        # 🔥 BROADCAST TO WEBSOCKET
+        # 🔥 Broadcast saved message
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f"hub_{hub_id}",
             {
-                "type": "chat.message",
+                "type": "chat_message",
                 "message": MessageSerializer(
                     message,
                     context={"request": self.request}
                 ).data,
             }
         )
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])

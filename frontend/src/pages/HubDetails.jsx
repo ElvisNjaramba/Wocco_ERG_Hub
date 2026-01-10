@@ -30,8 +30,22 @@ export default function HubDetails() {
 
   return (
     <>
+        <h2>{hub.name}</h2>
+    <p>{hub.description}</p>
+
+    <p>
+      <strong>Admin:</strong> {hub.admin}
+    </p>
+
+    {hub.members && (
+      <p>
+        <strong>Members:</strong> {hub.members.join(", ")}
+      </p>
+    )}
+
+    <hr />
       <h2>{hub.name}</h2>
-      <HubChat hubId={hubId} />
+    <HubChat hubId={hubId} />
     </>
   );
 }

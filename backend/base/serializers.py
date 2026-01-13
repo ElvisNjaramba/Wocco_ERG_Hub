@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Hub, HubMembership, Message
+from .models import Hub, HubMembership, Message, Event
 
 class HubSerializer(serializers.ModelSerializer):
     admin = serializers.StringRelatedField(read_only=True)
@@ -89,3 +89,46 @@ class MessageSerializer(serializers.ModelSerializer):
         ).data
 
 
+class EventSerializer(serializers.ModelSerializer):
+    created_by = serializers.StringRelatedField(read_only=True)
+    attendees_count = serializers.SerializerMethodField()
+    user_attending = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Event
+        fields = [
+            "id",
+            "hub",
+            "title",
+            "description",
+            "location",
+            "start_time",
+            "end_time",
+            "created_by",
+            "attendees_count",
+            "user_attending",
+        ]
+
+    def get_attendees_count(self, obj):
+        return obj.attendances.filter(confirmed=True).count()
+
+    def get_user_attending(self, obj):
+        user = self.context["request"].user
+        if not user.is_authenticated:
+            return False
+        return obj.attendances.filter(
+            user=user,
+            confirmed=True
+        ).exists()
+
+class EventDetailSerializer(EventSerializer):
+    attendees = serializers.SerializerMethodField()
+
+    class Meta(EventSerializer.Meta):
+        fields = EventSerializer.Meta.fields + ["attendees"]
+
+    def get_attendees(self, obj):
+        return [
+            att.user.username
+            for att in obj.attendances.filter(confirmed=True)
+        ]

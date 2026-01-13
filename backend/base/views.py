@@ -7,8 +7,8 @@ from django.core.exceptions import PermissionDenied
 
 from rest_framework.decorators import action, api_view, permission_classes
 
-from .models import Hub, HubMembership, Message
-from .serializers import HubDetailSerializer, HubSerializer, HubMembershipSerializer, MessageSerializer
+from .models import Hub, HubMembership, Message, Event
+from .serializers import EventDetailSerializer, EventSerializer, HubDetailSerializer, HubSerializer, HubMembershipSerializer, MessageSerializer
 from django.utils import timezone
 
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -140,3 +140,60 @@ def me(request):
         "username": request.user.username,
         "is_superuser": request.user.is_superuser,
     })
+
+class EventViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        hub_id = self.request.query_params.get("hub")
+        qs = Event.objects.all()
+
+        if hub_id:
+            qs = qs.filter(hub_id=hub_id)
+
+        return qs.order_by("start_time")
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return EventDetailSerializer
+        return EventSerializer
+
+    def perform_create(self, serializer):
+        hub_id = self.request.data.get("hub")
+        hub = Hub.objects.get(id=hub_id)
+
+        # 🔐 only hub admin can create events
+        if hub.admin != self.request.user:
+            raise PermissionDenied("Only hub admin can create events")
+
+        serializer.save(
+            hub=hub,
+            created_by=self.request.user
+        )
+
+    @action(detail=True, methods=["post"])
+    def attend(self, request, pk=None):
+        event = self.get_object()
+
+        if not is_approved_member(request.user, event.hub):
+            raise PermissionDenied("Not a hub member")
+
+        attendance, _ = EventAttendance.objects.get_or_create(
+            event=event,
+            user=request.user
+        )
+        attendance.confirmed = True
+        attendance.save()
+
+        return Response({"message": "Attendance confirmed"})
+
+    @action(detail=True, methods=["post"])
+    def unattend(self, request, pk=None):
+        event = self.get_object()
+
+        EventAttendance.objects.filter(
+            event=event,
+            user=request.user
+        ).delete()
+
+        return Response({"message": "Attendance removed"})

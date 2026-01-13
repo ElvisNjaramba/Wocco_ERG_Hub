@@ -39,3 +39,38 @@ class Message(models.Model):
 
     def __str__(self):
         return f"{self.sender.username} @ {self.hub.name}"
+
+class Event(models.Model):
+    hub = models.ForeignKey(
+        Hub,
+        on_delete=models.CASCADE,
+        related_name="events"
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    location = models.CharField(max_length=255, blank=True)
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField(null=True, blank=True)
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="created_events"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title} ({self.hub.name})"
+
+class EventAttendance(models.Model):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="attendances"
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    confirmed = models.BooleanField(default=True)
+    responded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("event", "user")

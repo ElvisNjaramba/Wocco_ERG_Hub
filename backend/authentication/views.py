@@ -48,7 +48,6 @@ class SuperUserDashboardViewSet(viewsets.ViewSet):
         serializer = CreateUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
-
         return Response({
             "username": result["username"],
             "password": result["password"]
@@ -58,26 +57,65 @@ class SuperUserDashboardViewSet(viewsets.ViewSet):
     def upload_excel(self, request):
         file = request.FILES.get("file")
         if not file:
-            return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "No file uploaded"}, status=400)
 
         df = pd.read_excel(file)
-        created_users = []
+        created = []
 
         for _, row in df.iterrows():
-            serializer = CreateUserSerializer(data={
-                "first_name": row["first_name"],
-                "last_name": row["last_name"],
-                "email": row["email"]
-            })
+            serializer = CreateUserSerializer(data=row)
             if serializer.is_valid():
                 result = serializer.save()
-                created_users.append({
+                created.append({
                     "username": result["username"],
-                    "password": result["password"],
                     "email": row["email"]
                 })
 
-        return Response(created_users, status=status.HTTP_201_CREATED)
+        return Response(created, status=201)
+
+    # ✅ USERS TABLE
+    @action(detail=False, methods=["get"], url_path="all-users")
+    def all_users(self, request):
+        users = User.objects.all().order_by("-date_joined")
+        return Response([
+            {
+                "id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "is_superuser": u.is_superuser,
+                "date_joined": u.date_joined,
+            }
+            for u in users
+        ])
+
+    # ✅ HUBS TABLE
+    @action(detail=False, methods=["get"], url_path="hubs")
+    def hubs(self, request):
+        from base.models import Hub
+        return Response([
+            {
+                "id": h.id,
+                "name": h.name,
+                "admin": h.admin.username,
+                "created_at": h.created_at,
+            }
+            for h in Hub.objects.select_related("admin")
+        ])
+
+    # ✅ EVENTS TABLE
+    @action(detail=False, methods=["get"], url_path="events")
+    def events(self, request):
+        from base.models import Event
+        return Response([
+            {
+                "id": e.id,
+                "title": e.title,
+                "hub": e.hub.name,
+                "created_by": e.created_by.username,
+                "start_time": e.start_time,
+            }
+            for e in Event.objects.select_related("hub", "created_by")
+        ])
 
 class ProfileViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]

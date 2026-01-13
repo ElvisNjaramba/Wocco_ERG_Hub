@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework.viewsets import ViewSet
 from rest_framework import viewsets
 
@@ -16,6 +17,8 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
 from .permissions import is_approved_member
+
+from rest_framework import serializers
 
 class DashboardViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
@@ -43,11 +46,13 @@ class HubViewSet(viewsets.ModelViewSet):
         return HubSerializer
 
 
-    def perform_create(self, serializer):
-        # Only superuser can create hubs
-        if not self.request.user.is_superuser:
-            return Response({"error": "Only superusers can create hubs"}, status=403)
-        serializer.save(admin=self.request.user)
+    # def perform_create(self, serializer):
+    #     hub = serializer.validated_data["hub"]
+
+    #     if self.request.user != hub.admin:
+    #         raise PermissionDenied("Only hub admin can create events")
+
+    #     serializer.save(created_by=self.request.user)
 
     @action(detail=True, methods=["post"])
     def request_join(self, request, pk=None):
@@ -161,17 +166,18 @@ class EventViewSet(viewsets.ModelViewSet):
         return EventSerializer
 
     def perform_create(self, serializer):
-        hub_id = self.request.data.get("hub")
-        hub = Hub.objects.get(id=hub_id)
+        hub_id = self.request.query_params.get("hub")
 
-        # 🔐 only hub admin can create events
+        if not hub_id:
+            raise serializers.ValidationError({"hub": "Hub is required"})
+
+        hub = get_object_or_404(Hub, id=hub_id)
+
         if hub.admin != self.request.user:
             raise PermissionDenied("Only hub admin can create events")
 
-        serializer.save(
-            hub=hub,
-            created_by=self.request.user
-        )
+        serializer.save(hub=hub, created_by=self.request.user)
+
 
     @action(detail=True, methods=["post"])
     def attend(self, request, pk=None):

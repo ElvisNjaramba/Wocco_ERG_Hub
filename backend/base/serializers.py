@@ -29,11 +29,12 @@ class HubSerializer(serializers.ModelSerializer):
 
 class HubDetailSerializer(serializers.ModelSerializer):
     admin = serializers.StringRelatedField()
+    admin_id = serializers.IntegerField(source="admin.id", read_only=True)
     members = serializers.SerializerMethodField()
 
     class Meta:
         model = Hub
-        fields = ["id", "name", "description", "admin", "members"]
+        fields = ["id", "name", "description", "admin", "admin_id", "members"]
 
     def get_members(self, obj):
         memberships = HubMembership.objects.filter(
@@ -91,6 +92,7 @@ class MessageSerializer(serializers.ModelSerializer):
 class EventSerializer(serializers.ModelSerializer):
     attendees_count = serializers.SerializerMethodField()
     user_attending = serializers.SerializerMethodField()
+    attendees = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -100,13 +102,24 @@ class EventSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "location",
-            "start_time", 
+            "start_time",
             "end_time",
             "attendees_count",
             "user_attending",
-            'created_by',
-            
+            "attendees",
+            "created_by",
         ]
+        read_only_fields = [
+            "hub",
+            "created_by",
+            "attendees_count",
+            "user_attending",
+            "attendees",
+        ]
+    location = serializers.CharField(
+        required=False,
+        allow_blank=True
+    )
 
     def get_attendees_count(self, obj):
         return obj.attendances.filter(attending=True).count()
@@ -119,6 +132,15 @@ class EventSerializer(serializers.ModelSerializer):
             user=request.user,
             attending=True
         ).exists()
+    
+    def get_attendees(self, obj):
+        return [
+            {
+                "id": a.user.id,
+                "name": a.user.get_full_name() or a.user.username,
+            }
+            for a in obj.attendances.filter(attending=True)[:5]
+        ]
 
 
 class EventDetailSerializer(EventSerializer):

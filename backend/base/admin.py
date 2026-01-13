@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Hub, HubMembership, Message
+from .models import EventAttendance, Hub, HubMembership, Message, Event
 
 
 class HubMembershipInline(admin.TabularInline):
@@ -50,3 +50,44 @@ class MessageAdmin(admin.ModelAdmin):
     def has_audio(self, obj):
         return bool(obj.audio)
     has_audio.boolean = True
+
+@admin.register(Event)
+class HubEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "hub",
+        "created_by",
+        "start_time",
+        "end_time",
+        "attendees_count",
+        "created_at",
+    )
+    list_filter = ("hub", "start_time")
+    search_fields = ("title", "description", "hub__name")
+    readonly_fields = ("created_at",)
+
+    def attendees_count(self, obj):
+        return obj.attendances.count()
+
+    attendees_count.short_description = "Attendees"
+
+@admin.register(EventAttendance)
+class EventAttendanceAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "event",
+        "hub",
+        "created_at",
+    )
+    list_filter = ("event__hub",)
+    search_fields = (
+        "user__username",
+        "event__title",
+        "event__hub__name",
+    )
+    readonly_fields = ("created_at",)
+
+    def hub(self, obj):
+        return obj.event.hub
+
+    hub.short_description = "Hub"

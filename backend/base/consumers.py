@@ -61,6 +61,19 @@ class HubChatConsumer(AsyncWebsocketConsumer):
             "message": event["message"]
         }))
 
+    async def event_update(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "event_update",
+            "event": event["event"]
+        }))
+
+    async def event_notification(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "event_notification",
+            "event": event["event"]
+        }))
+
+
     @database_sync_to_async
     def is_approved_member(self):
         return HubMembership.objects.filter(

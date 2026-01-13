@@ -88,9 +88,7 @@ class MessageSerializer(serializers.ModelSerializer):
             context=self.context
         ).data
 
-
 class EventSerializer(serializers.ModelSerializer):
-    created_by = serializers.StringRelatedField(read_only=True)
     attendees_count = serializers.SerializerMethodField()
     user_attending = serializers.SerializerMethodField()
 
@@ -102,24 +100,26 @@ class EventSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "location",
-            "start_time",
+            "start_time", 
             "end_time",
-            "created_by",
             "attendees_count",
             "user_attending",
+            'created_by',
+            
         ]
 
     def get_attendees_count(self, obj):
-        return obj.attendances.filter(confirmed=True).count()
+        return obj.attendances.filter(attending=True).count()
 
     def get_user_attending(self, obj):
-        user = self.context["request"].user
-        if not user.is_authenticated:
+        request = self.context.get("request")
+        if not request or request.user.is_anonymous:
             return False
         return obj.attendances.filter(
-            user=user,
-            confirmed=True
+            user=request.user,
+            attending=True
         ).exists()
+
 
 class EventDetailSerializer(EventSerializer):
     attendees = serializers.SerializerMethodField()
@@ -130,5 +130,6 @@ class EventDetailSerializer(EventSerializer):
     def get_attendees(self, obj):
         return [
             att.user.username
-            for att in obj.attendances.filter(confirmed=True)
+            for att in obj.attendances.filter(attending=True)
         ]
+

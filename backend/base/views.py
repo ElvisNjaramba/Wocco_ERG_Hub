@@ -7,13 +7,15 @@ from django.core.exceptions import PermissionDenied
 
 from rest_framework.decorators import action, api_view, permission_classes
 
-from .models import Hub, HubMembership, Message, Event
+from .models import Hub, HubMembership, Message, Event, EventAttendance
 from .serializers import EventDetailSerializer, EventSerializer, HubDetailSerializer, HubSerializer, HubMembershipSerializer, MessageSerializer
 from django.utils import timezone
 
 from rest_framework.parsers import MultiPartParser, FormParser
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+
+from .permissions import is_approved_member
 
 class DashboardViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
@@ -178,14 +180,40 @@ class EventViewSet(viewsets.ModelViewSet):
         if not is_approved_member(request.user, event.hub):
             raise PermissionDenied("Not a hub member")
 
-        attendance, _ = EventAttendance.objects.get_or_create(
+        attendance, created = EventAttendance.objects.get_or_create(
             event=event,
-            user=request.user
+            user=request.user,
+            defaults={"attending": True},
         )
-        attendance.confirmed = True
+
+        if not created and attendance.attending:
+            # already attending → do nothing
+            return Response({
+                "attending": True,
+                "attendees_count": event.attendances.filter(attending=True).count()
+            })
+
+        attendance.attending = True
         attendance.save()
 
-        return Response({"message": "Attendance confirmed"})
+        # 🔥 broadcast AFTER DB commit
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"hub_{event.hub_id}",
+            {
+                "type": "event_update",
+                "event": {
+                    "event_id": event.id,
+                    "action": "attending",
+                },
+            }
+        )
+
+        return Response({
+            "attending": True,
+            "attendees_count": event.attendances.filter(attending=True).count()
+        })
+
 
     @action(detail=True, methods=["post"])
     def unattend(self, request, pk=None):
@@ -194,6 +222,21 @@ class EventViewSet(viewsets.ModelViewSet):
         EventAttendance.objects.filter(
             event=event,
             user=request.user
-        ).delete()
+        ).update(attending=False)
 
-        return Response({"message": "Attendance removed"})
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"hub_{event.hub_id}",
+            {
+                "type": "event_update",
+                "event": {
+                    "event_id": event.id,
+                    "action": "not_attending",
+                },
+            }
+        )
+
+        return Response({
+            "attending": False,
+            "attendees_count": event.attendances.filter(attending=True).count()
+        })

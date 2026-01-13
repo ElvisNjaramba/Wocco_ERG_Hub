@@ -63,14 +63,11 @@ class Event(models.Model):
         return f"{self.title} ({self.hub.name})"
 
 class EventAttendance(models.Model):
-    event = models.ForeignKey(
-        Event,
-        on_delete=models.CASCADE,
-        related_name="attendances"
-    )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    confirmed = models.BooleanField(default=True)
-    responded_at = models.DateTimeField(auto_now_add=True)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="attendances")
+    attending = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("event", "user")
+        unique_together = ("user", "event")
+

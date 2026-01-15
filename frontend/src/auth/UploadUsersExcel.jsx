@@ -1,17 +1,14 @@
 import { useState } from "react";
 import api from "../api/axios";
 
+
 export default function UploadUsersExcel() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-  };
-
   const upload = async () => {
     if (!file) {
-      alert("Please select an Excel file first");
+      alert("Select an Excel file first");
       return;
     }
 
@@ -21,15 +18,17 @@ export default function UploadUsersExcel() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await api.post("/users/upload/", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-
+      const res = await api.post("/users/upload/", formData);
       console.log(res.data);
-      alert(`Uploaded ${res.data.length} users successfully`);
-    } catch (err) {
+
+      if (res.data.errors?.length) {
+        console.warn("Upload errors:", res.data.errors);
+          }
+
+      alert(`Uploaded ${res.data.created_count} users`);
+
+      // alert(`Uploaded ${res.data.length} users`);
+    } catch {
       alert("Upload failed");
     } finally {
       setLoading(false);
@@ -37,20 +36,19 @@ export default function UploadUsersExcel() {
   };
 
   return (
-    <div>
-      <h3>Upload Users via Excel</h3>
+    <div className="card">
+      <h3>Upload Users (Excel)</h3>
 
       <input
         type="file"
         accept=".xlsx,.xls"
-        onChange={handleFileChange}
+        onChange={(e) => setFile(e.target.files[0])}
       />
 
-      <br />
-
-      <button onClick={upload} disabled={loading}>
+      <button style={{ marginTop: "1rem" }} onClick={upload} disabled={loading}>
         {loading ? "Uploading..." : "Upload"}
       </button>
     </div>
   );
 }
+

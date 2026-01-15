@@ -146,28 +146,71 @@ export default function HubChat({ hubId }) {
   }, [hubId]);
 
   /* websocket */
+  // useEffect(() => {
+  //   if (!hubId || !token) return;
+
+  //   const ws = new WebSocket(
+  //     `ws://127.0.0.1:8000/ws/hub/${hubId}/?token=${token}`
+  //   );
+
+  //   socketRef.current = ws;
+
+  //   ws.onmessage = (e) => {
+  //     const data = JSON.parse(e.data);
+  //     if (data.type === "chat_message") {
+  //       setMessages((prev) =>
+  //         prev.some((m) => m.id === data.message.id)
+  //           ? prev
+  //           : [...prev, data.message]
+  //       );
+  //     }
+  //   };
+
+  //   return () => ws.close();
+  // }, [hubId, token]);
+
   useEffect(() => {
-    if (!hubId || !token) return;
+  if (!hubId || !token) return;
 
-    const ws = new WebSocket(
-      `ws://127.0.0.1:8000/ws/hub/${hubId}/?token=${token}`
-    );
+  const ws = new WebSocket(
+    `ws://127.0.0.1:8000/ws/hub/${hubId}/?token=${token}`
+  );
 
-    socketRef.current = ws;
+  socketRef.current = ws;
 
-    ws.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      if (data.type === "chat_message") {
-        setMessages((prev) =>
-          prev.some((m) => m.id === data.message.id)
-            ? prev
-            : [...prev, data.message]
-        );
-      }
-    };
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
 
-    return () => ws.close();
-  }, [hubId, token]);
+    // 🔹 Chat messages (existing logic)
+    if (data.type === "chat_message") {
+      setMessages((prev) =>
+        prev.some((m) => m.id === data.message.id)
+          ? prev
+          : [...prev, data.message]
+      );
+    }
+
+    // 🔹 Event attendance updates
+    if (data.type === "event_update") {
+      window.dispatchEvent(
+        new CustomEvent("event-update", {
+          detail: data.event,
+        })
+      );
+    }
+
+    // 🔹 Event creation notifications
+    if (data.type === "event_notification") {
+      window.dispatchEvent(
+        new CustomEvent("event-notification", {
+          detail: data.event,
+        })
+      );
+    }
+  };
+
+  return () => ws.close();
+}, [hubId, token]);
 
   /* send */
   const sendMessage = async () => {

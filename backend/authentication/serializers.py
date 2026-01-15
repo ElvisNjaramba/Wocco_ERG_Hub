@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 from django.utils.crypto import get_random_string
 
-from .models import Profile
+from .models import GeneratedCredential, Profile
 
 class SuperUserRegisterSerializer(serializers.Serializer):
     first_name = serializers.CharField()
@@ -57,6 +57,11 @@ class CreateUserSerializer(serializers.Serializer):
             password=password,
             first_name=validated_data["first_name"],
             last_name=validated_data["last_name"],
+        )
+
+        GeneratedCredential.objects.create(
+            user=user,
+            plain_password=password
         )
 
         return {

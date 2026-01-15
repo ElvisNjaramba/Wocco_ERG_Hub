@@ -10,6 +10,8 @@ import Profile from "./pages/Profile";
 import { ChangePassword } from "./pages/Password";
 import HubsList from "./pages/HubsList";
 import HubDetails from "./pages/HubDetails";
+import CreateUserPage from "./pages/CreateUserPage";
+import UploadUsersPage from "./pages/UploadUsersPage";
 
 import AppLayout from "./components/AppLayout";
 
@@ -25,6 +27,8 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/superuser/dashboard" element={<SuperUserDashboard />} />
+            <Route path="/superuser/users/create" element={<CreateUserPage />} />
+            <Route path="/superuser/users/upload" element={<UploadUsersPage />} />
             <Route path="/user/dashboard" element={<UserDashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/change-password" element={<ChangePassword />} />

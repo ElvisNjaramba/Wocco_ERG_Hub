@@ -5,10 +5,16 @@ from rest_framework.response import Response
 from django.contrib.auth.models import User
 from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
+
+from .models import GeneratedCredential
 from .serializers import ChangePasswordSerializer, ProfileSerializer, SuperUserRegisterSerializer, CreateUserSerializer
 from .permissions import IsSuperUser
 from django.utils.crypto import get_random_string
 from rest_framework.exceptions import PermissionDenied
+
+from django.db.models import Q
+from rest_framework.pagination import LimitOffsetPagination
+from django.db import models 
 
 
 class AuthViewSet(viewsets.ViewSet):
@@ -60,33 +66,79 @@ class SuperUserDashboardViewSet(viewsets.ViewSet):
             return Response({"error": "No file uploaded"}, status=400)
 
         df = pd.read_excel(file)
-        created = []
+        df.columns = df.columns.str.strip().str.lower()
 
-        for _, row in df.iterrows():
-            serializer = CreateUserSerializer(data=row)
+        created = []
+        errors = []
+
+        for index, row in df.iterrows():
+            data = {
+                "first_name": str(row.get("first_name") or row.get("first name") or "").strip(),
+                "last_name": str(row.get("last_name") or row.get("last name") or "").strip(),
+                "email": str(row.get("email") or "").strip(),
+            }
+
+            serializer = CreateUserSerializer(data=data)
+
             if serializer.is_valid():
                 result = serializer.save()
                 created.append({
+                    "row": index + 1,
                     "username": result["username"],
-                    "email": row["email"]
+                    "email": result["user"].email,
+                    "password": result["password"],
+                })
+            else:
+                errors.append({
+                    "row": index + 1,
+                    "errors": serializer.errors,
                 })
 
-        return Response(created, status=201)
+        return Response(
+            {
+                "created_count": len(created),
+                "created_users": created,
+                "errors": errors,
+            },
+            status=201,
+        )
 
-    # ✅ USERS TABLE
+
+
     @action(detail=False, methods=["get"], url_path="all-users")
     def all_users(self, request):
+        search = request.query_params.get("search", "").strip()
+
         users = User.objects.all().order_by("-date_joined")
-        return Response([
-            {
+
+        # 🔹 filter by first_name, last_name, email
+        if search:
+            users = users.filter(
+                models.Q(first_name__icontains=search) |
+                models.Q(last_name__icontains=search) |
+                models.Q(email__icontains=search)
+            )
+
+        paginator = LimitOffsetPagination()
+        paginated_users = paginator.paginate_queryset(users, request)
+
+        response = []
+        for u in paginated_users:
+            credential = GeneratedCredential.objects.filter(user=u).first()
+            response.append({
                 "id": u.id,
                 "username": u.username,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
                 "email": u.email,
                 "is_superuser": u.is_superuser,
                 "date_joined": u.date_joined,
-            }
-            for u in users
-        ])
+                "generated_password": credential.plain_password if credential else "—",
+            })
+
+        return paginator.get_paginated_response(response)
+
+
 
     # ✅ HUBS TABLE
     @action(detail=False, methods=["get"], url_path="hubs")

@@ -8,3 +8,11 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.user.username
+
+class GeneratedCredential(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    plain_password = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.user.username

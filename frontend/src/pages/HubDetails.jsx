@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import HubChat from "./HubChat";
+import HubEvents from "../components/HubEvents";
+
 
 export default function HubDetails() {
   const { hubId } = useParams();
@@ -9,12 +11,14 @@ export default function HubDetails() {
 
   const [hub, setHub] = useState(null);
   const [user, setUser] = useState(null);
+  const [tab, setTab] = useState("chat")
 
   useEffect(() => {
     const load = async () => {
       try {
-        const me = await api.get("/me/");
-        setUser(me.data);
+        const me = await api.get("/me/")
+        setUser(me.data)
+        localStorage.setItem("user", JSON.stringify(me.data))
 
         const hubRes = await api.get(`/hubs/${hubId}/`);
         setHub(hubRes.data);
@@ -43,9 +47,38 @@ export default function HubDetails() {
       </p>
     )}
 
-    <hr />
+<div className="tabs">
+  <button
+    onClick={() => setTab("chat")}
+    style={{ fontWeight: tab === "chat" ? "bold" : "normal" }}
+  >
+    Chat
+  </button>
+
+  <button
+    onClick={() => setTab("events")}
+    style={{ fontWeight: tab === "events" ? "bold" : "normal" }}
+  >
+    Events
+  </button>
+</div>
+
+<hr />
+
+{tab === "chat" && <HubChat hubId={hubId} />}
+{tab === "events" && (
+  <HubEvents
+    hubId={hubId}
+    hub={hub}
+    user={user}
+  />
+)}
+
+
+
+    {/* <hr />
       <h2>{hub.name}</h2>
-    <HubChat hubId={hubId} />
+    <HubChat hubId={hubId} /> */}
     </>
   );
 }

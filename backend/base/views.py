@@ -46,13 +46,13 @@ class HubViewSet(viewsets.ModelViewSet):
         return HubSerializer
 
 
-    # def perform_create(self, serializer):
-    #     hub = serializer.validated_data["hub"]
-
-    #     if self.request.user != hub.admin:
-    #         raise PermissionDenied("Only hub admin can create events")
-
-    #     serializer.save(created_by=self.request.user)
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
+    def upcoming_events(self, request, pk=None):
+        hub = self.get_object()
+        now = timezone.now()
+        events = hub.events.filter(start_time__gte=now).order_by("start_time")[:5]
+        serializer = EventSerializer(events, many=True, context={"request": request})
+        return Response(serializer.data)
 
     @action(detail=True, methods=["post"])
     def request_join(self, request, pk=None):
@@ -150,6 +150,7 @@ def me(request):
 
 class EventViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
         hub_id = self.request.query_params.get("hub")

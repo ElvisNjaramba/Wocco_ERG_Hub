@@ -4,10 +4,11 @@ from .models import Hub, HubMembership, Message, Event
 class HubSerializer(serializers.ModelSerializer):
     admin = serializers.StringRelatedField(read_only=True)
     membership_status = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Hub
-        fields = ["id", "name", "description", "admin", "membership_status"]
+        fields = ["id", "name", "description", "admin", "image", "image_url", "membership_status"]
 
     def get_membership_status(self, obj):
         user = self.context["request"].user
@@ -26,6 +27,12 @@ class HubSerializer(serializers.ModelSerializer):
             return "approved"
 
         return "pending"
+    
+    def get_image_url(self, obj):
+        request = self.context.get("request")
+        if obj.image and request:
+            return request.build_absolute_uri(obj.image.url)
+        return None
 
 class HubDetailSerializer(serializers.ModelSerializer):
     admin = serializers.StringRelatedField()
@@ -93,6 +100,8 @@ class EventSerializer(serializers.ModelSerializer):
     attendees_count = serializers.SerializerMethodField()
     user_attending = serializers.SerializerMethodField()
     attendees = serializers.SerializerMethodField()
+    image = serializers.ImageField(required=False, allow_null=True)
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -104,6 +113,8 @@ class EventSerializer(serializers.ModelSerializer):
             "location",
             "start_time",
             "end_time",
+            "image", 
+            "image_url",
             "attendees_count",
             "user_attending",
             "attendees",
@@ -141,6 +152,11 @@ class EventSerializer(serializers.ModelSerializer):
             }
             for a in obj.attendances.filter(attending=True)[:5]
         ]
+    def get_image_url(self, obj):
+        request = self.context.get("request")
+        if obj.image and request:
+            return request.build_absolute_uri(obj.image.url)
+        return None
 
 
 class EventDetailSerializer(EventSerializer):

@@ -6,6 +6,7 @@ class Hub(models.Model):
     description = models.TextField(blank=True)
     admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name="owned_hubs")
     members = models.ManyToManyField(User, through="HubMembership", related_name="hubs")
+    image = models.ImageField(upload_to="hub_images/", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -51,7 +52,7 @@ class Event(models.Model):
     location = models.CharField(max_length=255, blank=True)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
-
+    image = models.ImageField(upload_to="event_images/", blank=True, null=True)
     created_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,

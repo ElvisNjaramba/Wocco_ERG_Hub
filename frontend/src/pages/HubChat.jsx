@@ -146,70 +146,55 @@ export default function HubChat({ hubId }) {
   }, [hubId]);
 
   /* websocket */
-  // useEffect(() => {
-  //   if (!hubId || !token) return;
-
-  //   const ws = new WebSocket(
-  //     `ws://127.0.0.1:8000/ws/hub/${hubId}/?token=${token}`
-  //   );
-
-  //   socketRef.current = ws;
-
-  //   ws.onmessage = (e) => {
-  //     const data = JSON.parse(e.data);
-  //     if (data.type === "chat_message") {
-  //       setMessages((prev) =>
-  //         prev.some((m) => m.id === data.message.id)
-  //           ? prev
-  //           : [...prev, data.message]
-  //       );
-  //     }
-  //   };
-
-  //   return () => ws.close();
-  // }, [hubId, token]);
-
-  useEffect(() => {
+useEffect(() => {
   if (!hubId || !token) return;
 
-  const ws = new WebSocket(
-    `ws://127.0.0.1:8000/ws/hub/${hubId}/?token=${token}`
-  );
+  let ws;
 
-  socketRef.current = ws;
+  try {
+    ws = new WebSocket(
+      `ws://127.0.0.1:8000/ws/hub/${hubId}/?token=${token}`
+    );
+    socketRef.current = ws;
 
-  ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
+    ws.onopen = () => console.log("WebSocket connected");
 
-    // 🔹 Chat messages (existing logic)
-    if (data.type === "chat_message") {
-      setMessages((prev) =>
-        prev.some((m) => m.id === data.message.id)
-          ? prev
-          : [...prev, data.message]
-      );
-    }
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
 
-    // 🔹 Event attendance updates
-    if (data.type === "event_update") {
-      window.dispatchEvent(
-        new CustomEvent("event-update", {
-          detail: data.event,
-        })
-      );
-    }
+      if (data.type === "chat_message") {
+        setMessages((prev) =>
+          prev.some((m) => m.id === data.message.id)
+            ? prev
+            : [...prev, data.message]
+        );
+      }
 
-    // 🔹 Event creation notifications
-    if (data.type === "event_notification") {
-      window.dispatchEvent(
-        new CustomEvent("event-notification", {
-          detail: data.event,
-        })
-      );
+      if (data.type === "event_update") {
+        window.dispatchEvent(
+          new CustomEvent("event-update", { detail: data.event })
+        );
+      }
+
+      if (data.type === "event_notification") {
+        window.dispatchEvent(
+          new CustomEvent("event-notification", { detail: data.event })
+        );
+      }
+    };
+
+    ws.onerror = (e) => console.warn("WS error", e);
+
+    ws.onclose = (e) => console.log("WS closed", e.code, e.reason);
+  } catch (err) {
+    console.error("WebSocket failed", err);
+  }
+
+  return () => {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      ws.close();
     }
   };
-
-  return () => ws.close();
 }, [hubId, token]);
 
   /* send */

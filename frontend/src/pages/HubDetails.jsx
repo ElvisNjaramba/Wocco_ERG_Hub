@@ -11,7 +11,9 @@ export default function HubDetails() {
 
   const [hub, setHub] = useState(null);
   const [user, setUser] = useState(null);
-  const [tab, setTab] = useState("chat")
+    const [tab, setTab] = useState(
+    location.state?.tab || "chat"
+  );
 
   useEffect(() => {
     const load = async () => {

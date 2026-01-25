@@ -88,6 +88,7 @@ class Title {
     this.mesh.scale.set(textWidth, textHeight, 1);
     this.mesh.position.y = -this.plane.scale.y * 0.5 - textHeight * 0.5 - 0.05;
     this.mesh.setParent(this.plane);
+
   }
 }
 
@@ -106,8 +107,10 @@ class Media {
     bend,
     textColor,
     borderRadius = 0,
-    font
+    font,
+    data
   }) {
+    this.data = data;
     this.extra = 0;
     this.geometry = geometry;
     this.gl = gl;
@@ -207,6 +210,9 @@ class Media {
       geometry: this.geometry,
       program: this.program
     });
+    this.plane.userData = {
+      item: this,
+    };
     this.plane.setParent(this.scene);
   }
   createTitle() {
@@ -216,7 +222,7 @@ class Media {
       renderer: this.renderer,
       text: this.text,
       textColor: this.textColor,
-      fontFamily: this.font
+      font: this.font
     });
   }
   update(scroll, direction) {
@@ -289,14 +295,22 @@ class App {
       borderRadius = 0,
       font = 'bold 30px Figtree',
       scrollSpeed = 2,
-      scrollEase = 0.05
+      scrollEase = 0.05,
+      onItemClick,
     } = {}
   ) {
     document.documentElement.classList.remove('no-js');
     this.container = container;
     this.scrollSpeed = scrollSpeed;
     this.scroll = { ease: scrollEase, current: 0, target: 0, last: 0 };
+    autoBind(this);
     this.onCheckDebounce = debounce(this.onCheck, 200);
+
+
+    this.onItemClick = onItemClick;
+    this.handleClick = this.handleClick.bind(this);
+    this.container.addEventListener("click", this.handleClick);
+
     this.createRenderer();
     this.createCamera();
     this.createScene();
@@ -330,6 +344,35 @@ class App {
       widthSegments: 100
     });
   }
+handleClick(e) {
+  if (!this.onItemClick || !this.medias) return;
+
+  const rect = this.gl.canvas.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+  let clicked = null;
+
+  this.medias.forEach(media => {
+    const planeHalfW = media.plane.scale.x / 2;
+    const planeHalfH = media.plane.scale.y / 2;
+
+    const minX = (media.plane.position.x - planeHalfW) / (this.viewport.width / 2);
+    const maxX = (media.plane.position.x + planeHalfW) / (this.viewport.width / 2);
+    const minY = (media.plane.position.y - planeHalfH) / (this.viewport.height / 2);
+    const maxY = (media.plane.position.y + planeHalfH) / (this.viewport.height / 2);
+
+    if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+      clicked = media;
+    }
+  });
+
+  if (clicked) {
+    this.onItemClick(clicked.data);
+  }
+}
+
+
   createMedias(items, bend = 1, textColor, borderRadius, font) {
     const defaultItems = [
       { image: `https://picsum.photos/seed/1/800/600?grayscale`, text: 'Bridge' },
@@ -362,7 +405,8 @@ class App {
         bend,
         textColor,
         borderRadius,
-        font
+        font,
+        data,
       });
     });
   }
@@ -460,14 +504,15 @@ export default function CircularGallery({
   borderRadius = 0.05,
   font = 'bold 30px Figtree',
   scrollSpeed = 2,
-  scrollEase = 0.05
+  scrollEase = 0.05,
+  onItemClick,
 }) {
   const containerRef = useRef(null);
   useEffect(() => {
-    const app = new App(containerRef.current, { items, bend, textColor, borderRadius, font, scrollSpeed, scrollEase });
+    const app = new App(containerRef.current, { items, bend, textColor, borderRadius, font, scrollSpeed, scrollEase, onItemClick });
     return () => {
       app.destroy();
     };
-  }, [items, bend, textColor, borderRadius, font, scrollSpeed, scrollEase]);
+  }, [items, bend, textColor, borderRadius, font, scrollSpeed, scrollEase, onItemClick]);
   return <div className="w-full h-full overflow-hidden cursor-grab active:cursor-grabbing" ref={containerRef} />;
 }

@@ -53,6 +53,52 @@ class HubViewSet(viewsets.ModelViewSet):
         events = hub.events.filter(start_time__gte=now).order_by("start_time")[:5]
         serializer = EventSerializer(events, many=True, context={"request": request})
         return Response(serializer.data)
+    
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    def my_events(self, request):
+        user = request.user
+
+        if user.is_superuser:
+            hubs = Hub.objects.all()
+        else:
+            hubs = Hub.objects.filter(
+                hubmembership__user=user,
+                hubmembership__is_approved=True
+            )
+
+        data = []
+        now = timezone.now()
+
+        for hub in hubs:
+            events = hub.events.filter(start_time__gte=now).order_by("start_time")[:5]
+            if events.exists():
+                data.append({
+                    "hub_id": hub.id,
+                    "hub_name": hub.name,
+                    "events": EventSerializer(
+                        events,
+                        many=True,
+                        context={"request": request}
+                    ).data
+                })
+
+        return Response(data)
+    
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    def gallery_hubs(self, request):
+        user = request.user
+
+        if user.is_superuser:
+            hubs = Hub.objects.all()
+        else:
+            hubs = Hub.objects.filter(
+                hubmembership__user=user,
+                hubmembership__is_approved=True
+            )
+
+        serializer = HubSerializer(hubs, many=True, context={"request": request})
+        return Response(serializer.data)
+
 
     @action(detail=True, methods=["post"])
     def request_join(self, request, pk=None):

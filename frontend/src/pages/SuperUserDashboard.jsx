@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import CircularGallery from "../components/CircularGallery";
 import { HubsTable } from "../components/HubsTable";
@@ -9,13 +10,15 @@ export default function SuperUserDashboard() {
   const [hubEvents, setHubEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const navigate = useNavigate();
+
   useEffect(() => {
     const fetchHubEvents = async () => {
       try {
         setLoading(true);
 
         // 1️⃣ Fetch all hubs
-        const hubsRes = await api.get("/hubs/");
+        const hubsRes = await api.get("/hubs/gallery_hubs/");
         const hubs = hubsRes.data;
 
         const eventsData = [];
@@ -72,11 +75,19 @@ export default function SuperUserDashboard() {
               <CircularGallery
                 items={hub.events.map((e) => ({
                   image: e.image,
-                  text: e.title,
+                  title: e.title,
+                  hubName: hub.hubName,
+                  hubId: hub.hubId,
+                  eventId: e.id,
+                  startTime: e.start_time,
                 }))}
+
                 bend={3}
                 textColor="#fff"
                 borderRadius={0.05}
+                  onItemClick={(item) => {
+    navigate(`/hubs/${item.hubId}?tab=events&event=${item.eventId}`);
+  }}
               />
             </div>
           </div>

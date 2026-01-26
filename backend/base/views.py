@@ -99,6 +99,80 @@ class HubViewSet(viewsets.ModelViewSet):
         serializer = HubSerializer(hubs, many=True, context={"request": request})
         return Response(serializer.data)
 
+    def perform_create(self, serializer):
+        hub = serializer.save(admin=self.request.user)
+
+        # 🔥 Auto-add admin as approved member
+        HubMembership.objects.get_or_create(
+            hub=hub,
+            user=self.request.user,
+            defaults={
+                "is_approved": True,
+                "approved_at": timezone.now(),
+            },
+        )
+
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
+    def members(self, request, pk=None):
+        hub = self.get_object()
+
+        if hub.admin != request.user:
+            return Response({"error": "Not allowed"}, status=403)
+
+        memberships = HubMembership.objects.filter(
+            hub=hub,
+            is_approved=True
+        ).select_related("user")
+
+        return Response([
+            {
+                "user_id": m.user.id,
+                "username": m.user.username,
+                "joined_at": m.approved_at,
+            }
+            for m in memberships
+        ])
+
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
+    def ban_member(self, request, pk=None):
+        hub = self.get_object()
+
+        if hub.admin != request.user:
+            return Response({"error": "Not allowed"}, status=403)
+
+        user_id = request.data.get("user_id")
+
+        if user_id == request.user.id:
+            return Response({"error": "Admin cannot ban themselves"}, status=400)
+
+        HubMembership.objects.filter(
+            hub=hub,
+            user_id=user_id
+        ).delete()
+
+        return Response({"message": "Member banned"})
+    
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
+    def ban_history(self, request, pk=None):
+        hub = self.get_object()
+
+        if hub.admin != request.user:
+            return Response({"error": "Not allowed"}, status=403)
+
+        # Assuming you create a model BanHistory(user, hub, banned_by, banned_at)
+        from .models import BanHistory
+        history = BanHistory.objects.filter(hub=hub).order_by("-banned_at")
+        return Response([
+            {
+                "user_id": b.user.id,
+                "username": b.user.username,
+                "banned_at": b.banned_at,
+                "banned_by": b.banned_by.username
+            } for b in history
+        ])
+
+
 
     @action(detail=True, methods=["post"])
     def request_join(self, request, pk=None):
@@ -143,6 +217,19 @@ class HubViewSet(viewsets.ModelViewSet):
         membership.approved_at = timezone.now()
         membership.save()
         return Response({"message": "User approved"}, status=200)
+    
+    @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated])
+    def update_hub(self, request, pk=None):
+        hub = self.get_object()
+
+        if hub.admin != request.user:
+            return Response({"error": "Not allowed"}, status=403)
+
+        serializer = HubDetailSerializer(hub, data=request.data, partial=True, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
 
 class MessageViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser]
@@ -293,3 +380,16 @@ class EventViewSet(viewsets.ModelViewSet):
             "attending": False,
             "attendees_count": event.attendances.filter(attending=True).count()
         })
+    
+    @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated])
+    def update_event(self, request, pk=None):
+        event = self.get_object()
+
+        if event.hub.admin != request.user:
+            return Response({"error": "Not allowed"}, status=403)
+
+        serializer = EventSerializer(event, data=request.data, partial=True, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+

@@ -72,3 +72,13 @@ class EventAttendance(models.Model):
     class Meta:
         unique_together = ("user", "event")
 
+class BanHistory(models.Model):
+    hub = models.ForeignKey(Hub, on_delete=models.CASCADE, related_name="bans")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    banned_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="banned_members")
+    reason = models.TextField(blank=True)
+    banned_at = models.DateTimeField(auto_now_add=True)
+    unbanned_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user.username} banned from {self.hub.name} by {self.banned_by.username if self.banned_by else 'N/A'}"

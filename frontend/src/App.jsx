@@ -16,7 +16,7 @@ import AllEventsPage from "./pages/AllEventsPage";
 import HubDetails from "./pages/HubDetails";
 import CreateUserPage from "./pages/CreateUserPage";
 import UploadUsersPage from "./pages/UploadUsersPage";
-
+import HubChat from "./pages/HubChat";
 import AppLayout from "./components/AppLayout";
 
 export default function App() {
@@ -42,6 +42,7 @@ export default function App() {
             <Route path="/events/create" element={<CreateEventPage />} />
             <Route path="/events/list" element={<AllEventsPage />} />
             <Route path="/hubs/:hubId" element={<HubDetails />} />
+            <Route path="/hubs/:hubId/chat" element={<HubChat />} />
           </Route>
         </Route>
       </Routes>

@@ -24,7 +24,12 @@ class HubChatConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+        if hasattr(self, "room_group_name"):
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
+
 
 
     async def receive(self, text_data):
@@ -84,6 +89,9 @@ class HubChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def save_message(self, content, parent_id=None):
+        if parent_id in ("undefined", "", None):
+            parent_id = None
+
         return Message.objects.create(
             hub_id=self.hub_id,
             sender=self.user,

@@ -275,39 +275,55 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         hub_id = self.request.query_params.get("hub")
-        return Message.objects.filter(hub_id=hub_id).order_by("timestamp")
+        return Message.objects.filter(
+            hub_id=hub_id
+        ).select_related("sender", "parent").order_by("timestamp")
+
 
     def perform_create(self, serializer):
         hub_id = self.request.data.get("hub")
         hub = Hub.objects.get(id=hub_id)
 
-        membership = HubMembership.objects.filter(
-            hub=hub,
-            user=self.request.user,
-            is_approved=True
-        ).exists()
-
-        if not membership:
+        if not HubMembership.objects.filter(
+            hub=hub, user=self.request.user, is_approved=True
+        ).exists():
             raise PermissionDenied("Not a hub member")
+
+        parent_id = self.request.data.get("parent")
+
+        parent = None
+        if parent_id and parent_id != "undefined":
+            try:
+                parent_id = int(parent_id)
+                parent = Message.objects.filter(
+                    id=parent_id,
+                    hub=hub
+                ).first()
+
+                if not parent:
+                    raise serializers.ValidationError("Invalid parent message")
+            except ValueError:
+                raise serializers.ValidationError("Parent must be a number")
+
 
         message = serializer.save(
             sender=self.request.user,
-            hub=hub
+            hub=hub,
+            parent=parent,
         )
 
-        # 🔥 Broadcast saved message
+
+        # broadcast
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f"hub_{hub_id}",
             {
                 "type": "chat_message",
                 "message": MessageSerializer(
-                    message,
-                    context={"request": self.request}
+                    message, context={"request": self.request}
                 ).data,
-            }
+            },
         )
-
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])

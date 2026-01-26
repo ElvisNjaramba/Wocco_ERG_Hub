@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
-import EventCreateModal from "./EventCreateModal";
+import EventCreateModal from "../components/EventCreateModal";
 
 export default function HubEvents({ hubId, hub, user }) {
   const [events, setEvents] = useState([]);

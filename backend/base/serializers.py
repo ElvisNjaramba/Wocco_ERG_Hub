@@ -88,6 +88,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "media",
             "media_url",
             "parent_id",
+            "replies",  
             "timestamp",
         ]
 
@@ -99,9 +100,9 @@ class MessageSerializer(serializers.ModelSerializer):
 
     def get_replies(self, obj):
         return MessageSerializer(
-            obj.replies.all(),
+            obj.replies.all().order_by("timestamp"),
             many=True,
-            context=self.context
+            context=self.context,
         ).data
 
 class EventSerializer(serializers.ModelSerializer):

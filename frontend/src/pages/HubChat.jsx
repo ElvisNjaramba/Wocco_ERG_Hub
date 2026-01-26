@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import api from "../api/axios";
 
 /* ---------- helpers ---------- */
@@ -129,7 +130,10 @@ const MessageItem = ({ msg, onReply, messageMap }) => {
 };
 
 /* ---------- main ---------- */
-export default function HubChat({ hubId }) {
+export default function HubChat() {
+  const { hubId } = useParams();
+  const numericHubId = Number(hubId);
+
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
@@ -137,13 +141,16 @@ export default function HubChat({ hubId }) {
   const socketRef = useRef(null);
   const token = localStorage.getItem("access");
 
+  if (!numericHubId || Number.isNaN(numericHubId)) {
+    return <div>Invalid hub</div>;
+  }
+
   /* load messages */
-  useEffect(() => {
-    if (!hubId) return;
-    api.get(`/messages/?hub=${hubId}`).then((res) => {
-      setMessages(res.data);
-    });
-  }, [hubId]);
+useEffect(() => {
+  api.get(`/messages/?hub=${numericHubId}`).then((res) => {
+    setMessages(res.data);
+  });
+}, [numericHubId]);
 
   /* websocket */
 useEffect(() => {
@@ -152,9 +159,9 @@ useEffect(() => {
   let ws;
 
   try {
-    ws = new WebSocket(
-      `ws://127.0.0.1:8000/ws/hub/${hubId}/?token=${token}`
-    );
+ws = new WebSocket(
+  `ws://127.0.0.1:8000/ws/hub/${numericHubId}/?token=${token}`
+);
     socketRef.current = ws;
 
     ws.onopen = () => console.log("WebSocket connected");
@@ -198,21 +205,33 @@ useEffect(() => {
 }, [hubId, token]);
 
   /* send */
-  const sendMessage = async () => {
-    if (!text.trim() && !file) return;
+const sendMessage = async () => {
+if (!numericHubId) {
+  console.error("Invalid hubId:", numericHubId);
+  return;
+}
 
-    const form = new FormData();
-    form.append("hub", hubId);
-    if (text) form.append("content", text);
-    if (file) form.append("media", file);
-    if (replyTo) form.append("parent", replyTo.id);
 
-    await api.post("/messages/", form);
+  if (!text.trim() && !file) return;
 
-    setText("");
-    setFile(null);
-    setReplyTo(null);
-  };
+  const form = new FormData();
+form.append("hub", numericHubId.toString());
+  if (text) form.append("content", text);
+  if (file) form.append("media", file);
+
+  if (replyTo?.id && typeof replyTo.id === "number") {
+    form.append("parent", replyTo.id.toString());
+  }
+
+  console.log("FINAL SEND:", [...form.entries()]); // 👈 KEEP THIS
+
+  await api.post("/messages/", form);
+
+  setText("");
+  setFile(null);
+  setReplyTo(null);
+};
+
 
   const { roots, map } = buildTree(messages);
 

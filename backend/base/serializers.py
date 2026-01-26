@@ -109,6 +109,7 @@ class EventSerializer(serializers.ModelSerializer):
     user_attending = serializers.SerializerMethodField()
     attendees = serializers.SerializerMethodField()
     hub_name = serializers.CharField(source="hub.name", read_only=True)
+    hub_admin_id = serializers.IntegerField(source="hub.admin.id", read_only=True)
     membership_status = serializers.SerializerMethodField()
     image = serializers.ImageField(required=False, allow_null=True)
     image_url = serializers.SerializerMethodField()
@@ -121,6 +122,7 @@ class EventSerializer(serializers.ModelSerializer):
             "title",
             "hub_name",
             "description",
+            "hub_admin_id", 
             "location",
             "start_time",
             "end_time",
@@ -135,6 +137,7 @@ class EventSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "hub",
             "created_by",
+            "hub_admin_id", 
             "attendees_count",
             "user_attending",
             "attendees",

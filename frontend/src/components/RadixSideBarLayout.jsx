@@ -111,15 +111,21 @@ export default function RadixSidebarLayout({ children }) {
             },
           ]
         : []),
-      {
-        title: "Wocco Hubs",
-        icon: Bot,
-        items: [{ title: "All Hubs", url: "/hubs/list" }],
-      },
+{
+  title: "Wocco Hubs",
+  icon: Bot,
+  items: [
+    { title: "All Hubs", url: "/hubs/list" },
+    ...(role === "superuser" ? [{ title: "Create Hub", url: "/hubs/create" }] : []),
+  ],
+},
       {
         title: "Wocco Events",
         icon: BookOpen,
-        items: [{ title: "All Events", url: "/events/list" }],
+        items: [
+          { title: "All Events", url: "/events/list" },
+          ...(role === "superuser" ? [{ title: "Create Event", url: "/events/create" }] : []),
+        ],
       },
       {
         title: "User Profile",

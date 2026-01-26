@@ -252,6 +252,19 @@ class HubViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=201)
 
         return Response(serializer.errors, status=400)
+    
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], parser_classes=[MultiPartParser, FormParser])
+    def create_event(self, request, pk=None):
+        hub = self.get_object()
+
+        if hub.admin != request.user:
+            return Response({"error": "Only hub admin can create events"}, status=403)
+
+        serializer = EventSerializer(data=request.data, context={"request": request})
+        if serializer.is_valid():
+            serializer.save(hub=hub, created_by=request.user)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
 
 
 
@@ -325,11 +338,10 @@ class EventViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         hub_id = self.request.query_params.get("hub")
+        hub = get_object_or_404(Hub, id=hub_id)
 
         if not hub_id:
             raise serializers.ValidationError({"hub": "Hub is required"})
-
-        hub = get_object_or_404(Hub, id=hub_id)
 
         if hub.admin != self.request.user:
             raise PermissionDenied("Only hub admin can create events")

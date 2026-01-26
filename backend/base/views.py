@@ -3,7 +3,7 @@ from rest_framework.viewsets import ViewSet
 from rest_framework import viewsets
 
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.core.exceptions import PermissionDenied
 
 from rest_framework.decorators import action, api_view, permission_classes
@@ -229,6 +229,30 @@ class HubViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+    
+    @action(detail=False, methods=["post"], permission_classes=[IsAdminUser])
+    def create_hub(self, request):
+        serializer = HubSerializer(data=request.data, context={"request": request})
+        if serializer.is_valid():
+            hub = serializer.save(admin=request.user)
+
+            # Auto-add admin as approved member
+            HubMembership.objects.get_or_create(
+                hub=hub,
+                user=request.user,
+                defaults={
+                    "is_approved": True,
+                    "approved_at": timezone.now(),
+                },
+            )
+
+            # Reload serializer to include membership_status
+            serializer = HubSerializer(hub, context={"request": request})
+
+            return Response(serializer.data, status=201)
+
+        return Response(serializer.errors, status=400)
+
 
 
 class MessageViewSet(viewsets.ModelViewSet):
@@ -393,3 +417,10 @@ class EventViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data)
 
+from django.contrib.auth.models import User
+@api_view(["GET"])
+@permission_classes([IsAdminUser])  # Only superusers can select admins
+def list_users(request):
+    users = User.objects.all()
+    data = [{"id": u.id, "username": u.username, "email": u.email} for u in users]
+    return Response(data)

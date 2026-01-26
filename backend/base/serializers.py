@@ -15,6 +15,10 @@ class HubSerializer(serializers.ModelSerializer):
         if not request or request.user.is_anonymous:
             return None
 
+        # Admin is automatically an approved member
+        if obj.admin == request.user:
+            return "approved"
+
         membership = HubMembership.objects.filter(
             hub=obj,
             user=request.user
@@ -26,12 +30,16 @@ class HubSerializer(serializers.ModelSerializer):
         return "approved" if membership.is_approved else "pending"
 
 
+
     
     def get_image_url(self, obj):
         request = self.context.get("request")
-        if obj.image:
+        if obj.image and request:
             return request.build_absolute_uri(obj.image.url)
+        elif obj.image:
+            return obj.image.url
         return None
+
 
 
 class HubDetailSerializer(serializers.ModelSerializer):
@@ -177,7 +185,10 @@ class EventSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if obj.image and request:
             return request.build_absolute_uri(obj.image.url)
+        elif obj.image:
+            return obj.image.url
         return None
+
 
 
 class EventDetailSerializer(EventSerializer):

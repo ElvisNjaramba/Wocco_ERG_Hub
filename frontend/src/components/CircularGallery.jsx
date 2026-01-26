@@ -1,5 +1,5 @@
 import { Camera, Mesh, Plane, Program, Renderer, Texture, Transform } from 'ogl';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 function debounce(func, wait) {
   let timeout;
@@ -508,11 +508,38 @@ export default function CircularGallery({
   onItemClick,
 }) {
   const containerRef = useRef(null);
+  const [activeItem, setActiveItem] = useState(null);
+
   useEffect(() => {
-    const app = new App(containerRef.current, { items, bend, textColor, borderRadius, font, scrollSpeed, scrollEase, onItemClick });
-    return () => {
-      app.destroy();
-    };
-  }, [items, bend, textColor, borderRadius, font, scrollSpeed, scrollEase, onItemClick]);
-  return <div className="w-full h-full overflow-hidden cursor-grab active:cursor-grabbing" ref={containerRef} />;
+    const app = new App(containerRef.current, {
+      items,
+      bend,
+      textColor,
+      borderRadius,
+      font,
+      scrollSpeed,
+      scrollEase,
+      onItemClick: (item) => {
+        setActiveItem(item);
+        onItemClick?.(item);
+      },
+    });
+
+    return () => app.destroy();
+  }, [items]);
+
+  return (
+    <div className="relative w-full h-full">
+      {/* WebGL */}
+      <div
+        ref={containerRef}
+        className="w-full h-full overflow-hidden cursor-grab active:cursor-grabbing"
+      />
+
+      {/* Overlay */}
+      {activeItem && (
+        <GalleryOverlay item={activeItem} />
+      )}
+    </div>
+  );
 }

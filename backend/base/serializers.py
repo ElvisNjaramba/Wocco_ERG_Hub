@@ -11,28 +11,28 @@ class HubSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description", "admin", "image", "image_url", "membership_status"]
 
     def get_membership_status(self, obj):
-        user = self.context["request"].user
-        if not user.is_authenticated:
+        request = self.context.get("request")
+        if not request or request.user.is_anonymous:
             return None
 
         membership = HubMembership.objects.filter(
             hub=obj,
-            user=user
+            user=request.user
         ).first()
 
         if not membership:
             return None
 
-        if membership.is_approved:
-            return "approved"
+        return "approved" if membership.is_approved else "pending"
 
-        return "pending"
+
     
     def get_image_url(self, obj):
         request = self.context.get("request")
-        if obj.image and request:
+        if obj.image:
             return request.build_absolute_uri(obj.image.url)
         return None
+
 
 class HubDetailSerializer(serializers.ModelSerializer):
     admin = serializers.StringRelatedField()
@@ -100,6 +100,8 @@ class EventSerializer(serializers.ModelSerializer):
     attendees_count = serializers.SerializerMethodField()
     user_attending = serializers.SerializerMethodField()
     attendees = serializers.SerializerMethodField()
+    hub_name = serializers.CharField(source="hub.name", read_only=True)
+    membership_status = serializers.SerializerMethodField()
     image = serializers.ImageField(required=False, allow_null=True)
     image_url = serializers.SerializerMethodField()
 
@@ -109,6 +111,7 @@ class EventSerializer(serializers.ModelSerializer):
             "id",
             "hub",
             "title",
+            "hub_name",
             "description",
             "location",
             "start_time",
@@ -117,6 +120,7 @@ class EventSerializer(serializers.ModelSerializer):
             "image_url",
             "attendees_count",
             "user_attending",
+            "membership_status",
             "attendees",
             "created_by",
         ]
@@ -143,6 +147,23 @@ class EventSerializer(serializers.ModelSerializer):
             user=request.user,
             attending=True
         ).exists()
+    
+    
+    def get_membership_status(self, obj):
+        request = self.context.get("request")
+        if not request or request.user.is_anonymous:
+            return None
+
+        # Check if user is member of the hub for this event
+        membership = HubMembership.objects.filter(
+            hub=obj.hub,
+            user=request.user
+        ).first()
+
+        if not membership:
+            return None
+
+        return "approved" if membership.is_approved else "pending"
     
     def get_attendees(self, obj):
         return [

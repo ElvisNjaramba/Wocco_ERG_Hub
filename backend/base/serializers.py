@@ -62,6 +62,8 @@ class HubDetailSerializer(serializers.ModelSerializer):
 class HubMembershipSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     username = serializers.CharField(source="user.username", read_only=True)
+    approved_at = serializers.DateTimeField(read_only=True)
+    last_seen = serializers.DateTimeField(source="user.last_login", read_only=True)
 
     class Meta:
         model = HubMembership
@@ -71,6 +73,8 @@ class HubMembershipSerializer(serializers.ModelSerializer):
             "username",
             "is_approved",
             "requested_at",
+            "approved_at",
+            "last_seen",
         ]
 
 

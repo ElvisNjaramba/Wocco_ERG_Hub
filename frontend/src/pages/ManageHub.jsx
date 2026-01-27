@@ -26,10 +26,37 @@ export default function ManageHub() {
     setEditedHubDescription(res.data.description);
   };
 
-  const loadMembers = async () => {
+const loadMembers = async () => {
+  try {
     const res = await api.get(`/hubs/${hubId}/members/`);
-    setMembers(res.data);
-  };
+    const pendingRes = await api.get(`/hubs/${hubId}/pending_requests/`);
+
+const combined = [
+  ...res.data.map((m) => ({
+    ...m,
+    status: "approved",
+    approved_at: m.approved_at ?? null,
+    requested_at: m.requested_at ?? null,
+    last_seen: m.last_seen ?? null,
+  })),
+  ...pendingRes.data.map((m) => ({
+    ...m,
+    status: "pending",
+    approved_at: null,
+    requested_at: m.requested_at ?? null,
+    last_seen: m.last_seen ?? null,
+  })),
+];
+
+
+    setMembers(combined);
+  } catch (err) {
+    console.error("Failed to load members", err);
+  }
+};
+
+
+
 
   const loadEvents = async () => {
     const res = await api.get(`/events/?hub=${hubId}`);
@@ -62,13 +89,35 @@ export default function ManageHub() {
     loadBanHistory();
   }, [hubId]);
 
-  // --- Member actions ---
-  const banMember = async (userId) => {
-    if (!window.confirm("Ban this member?")) return;
+const banMember = async (userId) => {
+  if (!window.confirm("Ban this member?")) return;
+
+  try {
     await api.post(`/hubs/${hubId}/ban_member/`, { user_id: userId });
-    loadMembers();
-    loadBanHistory();
-  };
+
+    await loadMembers();     // remove user from members list
+    await loadBanHistory();  // show in ban history
+  } catch (err) {
+    console.error("Failed to ban member:", err);
+    alert("Failed to ban member");
+  }
+};
+
+const reapproveMember = async (userId) => {
+  if (!window.confirm("Re-approve this member?")) return;
+
+  try {
+    await api.post(`/hubs/${hubId}/reapprove_member/`, {
+      user_id: userId,
+    });
+
+    await loadMembers();      // back to members
+    await loadBanHistory();   // removed from ban history
+  } catch (err) {
+    console.error("Failed to re-approve member:", err);
+    alert("Failed to re-approve member");
+  }
+};
 
   // --- Hub update ---
 const updateHub = async () => {
@@ -109,6 +158,40 @@ const updateHub = async () => {
       alert("Failed to update event");
     }
   };
+
+  // --- Pending Requests ---
+const [pendingRequests, setPendingRequests] = useState([]);
+
+const loadPendingRequests = async () => {
+  try {
+    const res = await api.get(`/hubs/${hubId}/pending_requests/`);
+    setPendingRequests(res.data);
+  } catch (err) {
+    console.error("Failed to load pending requests", err);
+  }
+};
+
+useEffect(() => {
+  loadPendingRequests();
+}, [hubId]);
+
+const approveMember = async (userId) => {
+  try {
+    await api.post(`/hubs/${hubId}/approve_member/`, { user_id: userId });
+    await loadMembers();   // <- reload from backend to get approved_at and last_seen
+  } catch (err) {
+    console.error("Failed to approve member:", err);
+    alert("Failed to approve member");
+  }
+};
+
+
+const formatDate = (value) => {
+  if (!value) return "—";
+  const d = new Date(value);
+  return isNaN(d) ? "—" : d.toLocaleDateString();
+};
+
 
   // Filtered members
   const filteredMembers = members.filter((m) =>
@@ -151,43 +234,80 @@ const updateHub = async () => {
       </section>
 
       {/* --- Members --- */}
-      <section className="bg-white rounded-2xl shadow p-6">
-        <h3 className="text-xl font-semibold">Members</h3>
-        <input
-          placeholder="Search members..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="mt-2 mb-4 w-full rounded-lg border-gray-300 p-2 focus:ring-[#432dd7] focus:border-[#432dd7]"
-        />
+{/* --- Members Table --- */}
+<section className="bg-white rounded-2xl shadow p-6">
+  <h3 className="text-xl font-semibold">Members</h3>
 
-        <div className="divide-y">
-          {filteredMembers.map((m) => (
-            <div
-              key={m.user_id}
-              className="flex justify-between items-center py-3"
-            >
-              <div>
-                <p className="font-medium">{m.username}</p>
-                <p className="text-sm text-gray-500">
-                  Joined:{" "}
-                  {m.approved_at
-                    ? new Date(m.approved_at).toLocaleDateString()
-                    : "Pending"}
-                </p>
-              </div>
-              <button
-                onClick={() => banMember(m.user_id)}
-                className="text-sm px-4 py-2 rounded-xl bg-red-500 text-white hover:bg-red-600 transition"
-              >
-                Ban
-              </button>
-            </div>
-          ))}
-          {filteredMembers.length === 0 && (
-            <p className="text-gray-500 text-center py-4">No members found</p>
-          )}
-        </div>
-      </section>
+  <input
+    placeholder="Search members..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    className="mt-2 mb-4 w-full rounded-lg border-gray-300 p-2 focus:ring-[#432dd7] focus:border-[#432dd7]"
+  />
+
+  <div className="overflow-x-auto">
+    <table className="w-full table-auto border-collapse">
+      <thead className="bg-gray-100">
+        <tr>
+          <th className="px-4 py-2 text-left">Username</th>
+          <th className="px-4 py-2 text-left">Status</th>
+          <th className="px-4 py-2 text-left">Date Joined</th>
+          <th className="px-4 py-2 text-left">Last Seen</th>
+          <th className="px-4 py-2 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filteredMembers.length === 0 && (
+          <tr>
+            <td colSpan={5} className="text-center py-4 text-gray-500">
+              No members found
+            </td>
+          </tr>
+        )}
+
+        {filteredMembers.map((m) => (
+          <tr key={m.user_id} className="border-b hover:bg-gray-50">
+            <td className="px-4 py-2">{m.username}</td>
+            <td className="px-4 py-2">
+              {m.status === "approved" ? "Approved" : "Pending"}
+            </td>
+<td className="px-4 py-2">
+  {m.status === "approved"
+    ? formatDate(m.approved_at)
+    : formatDate(m.requested_at)}
+</td>
+
+
+<td className="px-4 py-2">
+  {m.last_seen ? new Date(m.last_seen).toLocaleString() : "N/A"}
+</td>
+
+<td className="px-4 py-2 space-x-2">
+  {m.status === "pending" && (
+    <button
+      onClick={() => approveMember(m.user_id)}
+      className="text-sm px-3 py-1 rounded-xl bg-green-500 text-white hover:bg-green-600 transition"
+    >
+      Approve
+    </button>
+  )}
+
+  {m.status === "approved" && (
+    <button
+      onClick={() => banMember(m.user_id)}
+      className="text-sm px-3 py-1 rounded-xl bg-red-500 text-white hover:bg-red-600 transition"
+    >
+      Ban
+    </button>
+  )}
+</td>
+
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</section>
 
       {/* --- Events --- */}
       <section className="bg-white rounded-2xl shadow p-6">
@@ -305,23 +425,39 @@ const updateHub = async () => {
       </section>
 
       {/* --- Ban History --- */}
-      <section className="bg-white rounded-2xl shadow p-6">
-        <h3 className="text-xl font-semibold">Ban History</h3>
-        <div className="divide-y mt-4">
-          {banHistory.map((b) => (
-            <div key={b.user_id} className="flex justify-between py-2">
-              <span>{b.username}</span>
-              <span className="text-gray-500 text-sm">
-                {new Date(b.banned_at).toLocaleString()}
-              </span>
-            </div>
-          ))}
+<section className="bg-white rounded-2xl shadow p-6">
+  <h3 className="text-xl font-semibold">Ban History</h3>
 
-          {banHistory.length === 0 && (
-            <p className="text-gray-500 text-center py-4">No bans yet</p>
-          )}
+  <div className="divide-y mt-4">
+    {banHistory.map((b) => (
+      <div
+        key={b.user_id}
+        className="flex items-center justify-between py-3"
+      >
+        <div>
+          <p className="font-medium">{b.username}</p>
+          <p className="text-sm text-gray-500">
+            Banned at {new Date(b.banned_at).toLocaleString()}
+          </p>
         </div>
-      </section>
+
+        <button
+          onClick={() => reapproveMember(b.user_id)}
+          className="text-sm px-3 py-1 rounded-xl bg-green-500 text-white hover:bg-green-600 transition"
+        >
+          Approve
+        </button>
+      </div>
+    ))}
+
+    {banHistory.length === 0 && (
+      <p className="text-gray-500 text-center py-4">
+        No banned members
+      </p>
+    )}
+  </div>
+</section>
+
     </div>
   );
 }

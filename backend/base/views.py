@@ -119,19 +119,21 @@ class HubViewSet(viewsets.ModelViewSet):
         if hub.admin != request.user:
             return Response({"error": "Not allowed"}, status=403)
 
-        memberships = HubMembership.objects.filter(
-            hub=hub,
-            is_approved=True
-        ).select_related("user")
+        memberships = HubMembership.objects.filter(hub=hub).select_related("user")
 
         return Response([
             {
                 "user_id": m.user.id,
                 "username": m.user.username,
-                "joined_at": m.approved_at,
+                "status": "approved" if m.is_approved else "pending",
+                "requested_at": m.requested_at,
+                "approved_at": m.approved_at,
+                "last_seen": m.user.last_login,
             }
             for m in memberships
         ])
+
+
 
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
@@ -189,17 +191,22 @@ class HubViewSet(viewsets.ModelViewSet):
     def pending_requests(self, request, pk=None):
         hub = self.get_object()
 
-        # only admin can see requests
         if hub.admin != request.user:
             return Response({"error": "Not allowed"}, status=403)
 
-        memberships = HubMembership.objects.filter(
-            hub=hub,
-            is_approved=False
-        )
+        memberships = HubMembership.objects.filter(hub=hub, is_approved=False).select_related("user")
 
-        serializer = HubMembershipSerializer(memberships, many=True)
-        return Response(serializer.data)
+        return Response([
+            {
+                "user_id": m.user.id,
+                "username": m.user.username,
+                "status": "pending",
+                "approved_at": None,
+                "last_seen": m.user.last_login,
+            }
+            for m in memberships
+        ])
+
 
     @action(detail=True, methods=["post"])
     def approve_member(self, request, pk=None):
@@ -443,6 +450,31 @@ class EventViewSet(viewsets.ModelViewSet):
         serializer = EventSerializer(event, data=request.data, partial=True, context={"request": request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    def upcoming(self, request):
+        now = timezone.now()
+
+        # 🔥 Superuser sees EVERYTHING
+        if request.user.is_superuser:
+            events = Event.objects.filter(
+                start_time__gte=now
+            ).select_related("hub").order_by("start_time")
+
+        # 👤 Regular users: only approved hubs
+        else:
+            events = Event.objects.filter(
+                start_time__gte=now,
+                hub__hubmembership__user=request.user,
+                hub__hubmembership__is_approved=True,
+            ).select_related("hub").order_by("start_time")
+
+        serializer = EventSerializer(
+            events,
+            many=True,
+            context={"request": request}
+        )
         return Response(serializer.data)
 
 from django.contrib.auth.models import User

@@ -522,3 +522,20 @@ class MessageHighlightViewSet(viewsets.ViewSet):
         highlights = MessageHighlight.objects.filter(user=request.user)
         message_ids = highlights.values_list("message_id", flat=True)
         return Response(list(message_ids))
+    
+
+
+@api_view(['GET'])
+def superusers_list(request):
+    users = User.objects.filter(is_superuser=True)
+    data = [
+        {
+            "username": u.username,
+            "email": u.email,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+            "password": None  # or handle temporary password if you store it
+        }
+        for u in users
+    ]
+    return Response(data)

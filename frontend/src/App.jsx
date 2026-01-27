@@ -25,7 +25,6 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/login" element={<Login />} />
-        <Route path="/register/superuser" element={<SuperUserRegister />} />
 
         {/* Protected */}
         <Route element={<ProtectedRoute />}>
@@ -33,6 +32,7 @@ export default function App() {
             <Route path="/superuser/dashboard" element={<SuperUserDashboard />} />
             <Route path="/superuser/users/create" element={<CreateUserPage />} />
             <Route path="/superuser/users/upload" element={<UploadUsersPage />} />
+            <Route path="/register/superuser" element={<SuperUserRegister />} />
             <Route path="/user/dashboard" element={<UserDashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/change-password" element={<ChangePassword />} />

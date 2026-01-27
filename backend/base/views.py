@@ -102,8 +102,8 @@ class HubViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         hub = serializer.save(admin=self.request.user)
 
-        # 🔥 Auto-add admin as approved member
-        HubMembership.objects.get_or_create(
+        # ✅ Always ensure admin is an approved member
+        HubMembership.objects.update_or_create(
             hub=hub,
             user=self.request.user,
             defaults={
@@ -111,6 +111,7 @@ class HubViewSet(viewsets.ModelViewSet):
                 "approved_at": timezone.now(),
             },
         )
+
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def members(self, request, pk=None):
@@ -286,19 +287,25 @@ class MessageViewSet(viewsets.ModelViewSet):
             hub_id=hub_id
         ).select_related("sender", "parent").order_by("timestamp")
 
-
     def perform_create(self, serializer):
         hub_id = self.request.data.get("hub")
-        hub = Hub.objects.get(id=hub_id)
+        hub = get_object_or_404(Hub, id=hub_id)
+        user = self.request.user
 
-        if not HubMembership.objects.filter(
-            hub=hub, user=self.request.user, is_approved=True
-        ).exists():
-            raise PermissionDenied("Not a hub member")
+        # ✅ ADMIN IS ALWAYS ALLOWED
+        if hub.admin != user:
+            is_member = HubMembership.objects.filter(
+                hub=hub,
+                user=user,
+                is_approved=True
+            ).exists()
+
+            if not is_member:
+                raise PermissionDenied("Not a hub member")
 
         parent_id = self.request.data.get("parent")
-
         parent = None
+
         if parent_id and parent_id != "undefined":
             try:
                 parent_id = int(parent_id)
@@ -312,15 +319,13 @@ class MessageViewSet(viewsets.ModelViewSet):
             except ValueError:
                 raise serializers.ValidationError("Parent must be a number")
 
-
         message = serializer.save(
-            sender=self.request.user,
+            sender=user,
             hub=hub,
             parent=parent,
         )
 
-
-        # broadcast
+        # 🔥 broadcast
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f"hub_{hub_id}",

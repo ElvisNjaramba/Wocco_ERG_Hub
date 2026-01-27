@@ -15,7 +15,6 @@ class HubSerializer(serializers.ModelSerializer):
         if not request or request.user.is_anonymous:
             return None
 
-        # Admin is automatically an approved member
         if obj.admin == request.user:
             return "approved"
 
@@ -28,7 +27,6 @@ class HubSerializer(serializers.ModelSerializer):
             return None
 
         return "approved" if membership.is_approved else "pending"
-
 
 
     

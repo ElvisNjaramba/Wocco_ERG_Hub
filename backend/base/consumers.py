@@ -81,7 +81,9 @@ class HubChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def is_approved_member(self):
-        return HubMembership.objects.filter(
+        from .models import Hub  # import inside method if circular
+        hub = Hub.objects.get(id=self.hub_id)
+        return self.user == hub.admin or HubMembership.objects.filter(
             hub_id=self.hub_id,
             user=self.user,
             is_approved=True

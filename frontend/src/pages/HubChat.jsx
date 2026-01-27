@@ -539,25 +539,53 @@ export default function HubChat() {
   }, [hubId, token]);
 
   /* send */
-  const sendMessage = async () => {
-    if (!text.trim() && !file) return;
+  // const sendMessage = async () => {
+  //   if (!text.trim() && !file) return;
 
+  //   const form = new FormData();
+  //   form.append("hub", numericHubId.toString());
+  //   if (text) form.append("content", text);
+  //   if (file) form.append("media", file);
+  //   if (replyTo?.id) form.append("parent", replyTo.id.toString());
+
+  //   await api.post("/messages/", form);
+
+  //   if (replyTo?.id) {
+  //     setHighlightedId(replyTo.id);
+  //   }
+
+  //   setText("");
+  //   setFile(null);
+  //   setReplyTo(null);
+  // };
+
+const sendMessage = async () => {
+  if (!text.trim() && !file) return;
+
+  if (file) {
+    // Use REST API for file uploads
     const form = new FormData();
     form.append("hub", numericHubId.toString());
     if (text) form.append("content", text);
-    if (file) form.append("media", file);
+    form.append("media", file);
     if (replyTo?.id) form.append("parent", replyTo.id.toString());
 
     await api.post("/messages/", form);
+  } else {
+    // Use WebSocket for text-only messages
+    const messagePayload = {
+      content: text,
+      parent: replyTo?.id,
+    };
+    socketRef.current.send(JSON.stringify(messagePayload));
+  }
 
-    if (replyTo?.id) {
-      setHighlightedId(replyTo.id);
-    }
+  setText("");
+  setFile(null);
+  setReplyTo(null);
+};
 
-    setText("");
-    setFile(null);
-    setReplyTo(null);
-  };
+
 
   const { roots, map } = buildTree(messages);
 

@@ -8,7 +8,7 @@ from django.core.exceptions import PermissionDenied
 
 from rest_framework.decorators import action, api_view, permission_classes
 
-from .models import Hub, HubMembership, Message, Event, EventAttendance
+from .models import Hub, HubMembership, Message, Event, EventAttendance, MessageHighlight
 from .serializers import EventDetailSerializer, EventSerializer, HubDetailSerializer, HubSerializer, HubMembershipSerializer, MessageSerializer
 from django.utils import timezone
 
@@ -489,3 +489,36 @@ def list_users(request):
     users = User.objects.all()
     data = [{"id": u.id, "username": u.username, "email": u.email} for u in users]
     return Response(data)
+
+
+
+class MessageHighlightViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=["post"])
+    def highlight(self, request):
+        """
+        Highlight a parent message.
+        """
+        message_id = request.data.get("message_id")
+        if not message_id:
+            return Response({"error": "message_id is required"}, status=400)
+
+        try:
+            message = Message.objects.get(id=message_id)
+        except Message.DoesNotExist:
+            return Response({"error": "Message not found"}, status=404)
+
+        # Create highlight (idempotent)
+        MessageHighlight.objects.get_or_create(user=request.user, message=message)
+
+        return Response({"message": "Highlighted"}, status=201)
+
+    
+    def list(self, request):
+        """
+        List all highlighted message IDs for the user.
+        """
+        highlights = MessageHighlight.objects.filter(user=request.user)
+        message_ids = highlights.values_list("message_id", flat=True)
+        return Response(list(message_ids))

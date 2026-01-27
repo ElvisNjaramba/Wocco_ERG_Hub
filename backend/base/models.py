@@ -82,3 +82,15 @@ class BanHistory(models.Model):
 
     def __str__(self):
         return f"{self.user.username} banned from {self.hub.name} by {self.banned_by.username if self.banned_by else 'N/A'}"
+    
+
+class MessageHighlight(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="highlighted_messages")
+    message = models.ForeignKey("Message", on_delete=models.CASCADE, related_name="highlights")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "message")
+
+    def __str__(self):
+        return f"{self.user.username} highlighted message {self.message.id}"

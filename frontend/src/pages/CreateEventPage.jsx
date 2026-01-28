@@ -64,25 +64,28 @@ await api.post(`/hubs/${hubId}/create_event/`, formData, {
     }
   };
 
-  return (
-    <div className="max-w-xl mx-auto p-6 bg-white shadow-lg rounded-2xl mt-10">
-      <h2 className="text-3xl font-bold text-[#432dd7] mb-6 text-center">
-        Create Event
-      </h2>
+return (
+  <div className="max-w-4xl mx-auto p-8 bg-white shadow-xl rounded-3xl mt-10">
+    <h2 className="text-3xl font-bold text-[#432dd7] mb-8 text-center">
+      Create Event
+    </h2>
 
-      {error && (
-        <p className="text-red-600 bg-red-100 p-2 rounded mb-4">{JSON.stringify(error)}</p>
-      )}
+    {error && (
+      <p className="text-red-600 bg-red-100 p-3 rounded-xl mb-6 text-sm">
+        {JSON.stringify(error)}
+      </p>
+    )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Hub Selection */}
+    <form onSubmit={handleSubmit} className="space-y-8">
+      {/* Hub + Title */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium mb-1">Select Hub</label>
           <select
             value={hubId}
             onChange={(e) => setHubId(e.target.value)}
             required
-            className="w-full border rounded-lg px-3 py-2"
+            className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-[#432dd7]/20 focus:border-[#432dd7]"
           >
             <option value="">-- Select a Hub --</option>
             {hubs.map((hub) => (
@@ -93,7 +96,6 @@ await api.post(`/hubs/${hubId}/create_event/`, formData, {
           </select>
         </div>
 
-        {/* Title */}
         <div>
           <label className="block text-sm font-medium mb-1">Title</label>
           <input
@@ -101,35 +103,37 @@ await api.post(`/hubs/${hubId}/create_event/`, formData, {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
-            className="w-full border rounded-lg px-3 py-2"
+            className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-[#432dd7]/20 focus:border-[#432dd7]"
           />
         </div>
+      </div>
 
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            required
-            className="w-full border rounded-lg px-3 py-2"
-            rows={4}
-          />
-        </div>
+      {/* Description */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Description</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          required
+          rows={4}
+          className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#432dd7]/20 focus:border-[#432dd7]"
+        />
+      </div>
 
-        {/* Location */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Location</label>
-          <input
-            type="text"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            required
-            className="w-full border rounded-lg px-3 py-2"
-          />
-        </div>
+      {/* Location */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Location</label>
+        <input
+          type="text"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          required
+          className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-[#432dd7]/20 focus:border-[#432dd7]"
+        />
+      </div>
 
-        {/* Start Time */}
+      {/* Start + End Time */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium mb-1">Start Time</label>
           <input
@@ -137,40 +141,42 @@ await api.post(`/hubs/${hubId}/create_event/`, formData, {
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
             required
-            className="w-full border rounded-lg px-3 py-2"
+            className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-[#432dd7]/20 focus:border-[#432dd7]"
           />
         </div>
 
-        {/* End Time */}
         <div>
           <label className="block text-sm font-medium mb-1">End Time</label>
           <input
             type="datetime-local"
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
-            className="w-full border rounded-lg px-3 py-2"
+            className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-[#432dd7]/20 focus:border-[#432dd7]"
           />
         </div>
+      </div>
 
-        {/* Image */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Image</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setImage(e.target.files[0])}
-            className="w-full mt-1"
-          />
-        </div>
+      {/* Image */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Event Image</label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setImage(e.target.files[0])}
+          className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-[#432dd7]/10 file:text-[#432dd7] hover:file:bg-[#432dd7]/20"
+        />
+      </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2 rounded-xl bg-[#432dd7] text-white font-medium hover:bg-[#3725b8] transition"
-        >
-          {loading ? "Creating..." : "Create Event"}
-        </button>
-      </form>
-    </div>
-  );
+      {/* Submit */}
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#432dd7] to-purple-600 text-white font-semibold hover:shadow-lg hover:scale-[1.01] transition disabled:opacity-50"
+      >
+        {loading ? "Creating…" : "Create Event"}
+      </button>
+    </form>
+  </div>
+);
+
 }

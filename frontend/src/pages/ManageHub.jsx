@@ -202,6 +202,22 @@ const formatDate = (value) => {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
+
+      <section className="bg-red-50 border border-red-200 rounded-2xl p-6">
+  <h3 className="text-xl font-semibold text-red-600">Danger Zone</h3>
+
+  <button
+    onClick={async () => {
+      if (!window.confirm("This will permanently delete this hub. Continue?")) return;
+      await api.delete(`/hubs/${hubId}/delete_hub/`);
+      alert("Hub deleted");
+      window.location.href = "/hubs/list";
+    }}
+    className="mt-4 bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700"
+  >
+    Delete Hub
+  </button>
+</section>
       {/* --- Hub Info --- */}
       <section className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-2xl font-semibold text-[#432dd7]">Manage Hub</h2>
@@ -283,14 +299,28 @@ const formatDate = (value) => {
 </td>
 
 <td className="px-4 py-2 space-x-2">
-  {m.status === "pending" && (
+{m.status === "pending" && (
+  <div className="flex gap-2">
     <button
       onClick={() => approveMember(m.user_id)}
       className="text-sm px-3 py-1 rounded-xl bg-green-500 text-white hover:bg-green-600 transition"
     >
       Approve
     </button>
-  )}
+    <button
+      onClick={async () => {
+        if (!window.confirm("Deny this request?")) return;
+        await api.post(`/hubs/${hubId}/deny_member/`, { user_id: m.user_id });
+        await loadMembers();
+        await loadPendingRequests();
+      }}
+      className="text-sm px-3 py-1 rounded-xl bg-red-500 text-white hover:bg-red-600 transition"
+    >
+      Deny
+    </button>
+  </div>
+)}
+
 
   {m.status === "approved" && (
     <button
@@ -418,6 +448,17 @@ const formatDate = (value) => {
                 >
                   Save Event Changes
                 </button>
+                <button
+  onClick={async () => {
+    if (!window.confirm("Delete this event?")) return;
+    await api.post(`/events/${e.id}/delete_event/`);
+    await loadEvents();
+  }}
+  className="mt-2 rounded-xl bg-red-500 text-white px-4 py-2 hover:bg-red-600"
+>
+  Delete Event
+</button>
+
               </div>
             );
           })}
@@ -442,11 +483,12 @@ const formatDate = (value) => {
         </div>
 
         <button
-          onClick={() => reapproveMember(b.user_id)}
-          className="text-sm px-3 py-1 rounded-xl bg-green-500 text-white hover:bg-green-600 transition"
-        >
-          Approve
-        </button>
+  onClick={() => reapproveMember(b.user_id)}
+  className="text-sm px-3 py-1 rounded-xl bg-green-500 text-white hover:bg-green-600"
+>
+  Rejoin User
+</button>
+
       </div>
     ))}
 

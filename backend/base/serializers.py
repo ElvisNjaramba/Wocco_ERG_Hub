@@ -4,11 +4,12 @@ from .models import Hub, HubMembership, Message, Event
 class HubSerializer(serializers.ModelSerializer):
     admin = serializers.StringRelatedField(read_only=True)
     membership_status = serializers.SerializerMethodField()
+    members_count = serializers.IntegerField(read_only=True)
     image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Hub
-        fields = ["id", "name", "description", "admin", "image", "image_url", "membership_status"]
+        fields = ["id", "name", "description", "admin", "image", "members_count", "image_url", "membership_status"]
 
     def get_membership_status(self, obj):
         request = self.context.get("request")
@@ -115,6 +116,10 @@ class EventSerializer(serializers.ModelSerializer):
     hub_admin_id = serializers.IntegerField(source="hub.admin.id", read_only=True)
     membership_status = serializers.SerializerMethodField()
     image = serializers.ImageField(required=False, allow_null=True)
+    created_by_username = serializers.CharField(
+        source="created_by.username",
+        read_only=True
+    )
     image_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -136,6 +141,7 @@ class EventSerializer(serializers.ModelSerializer):
             "membership_status",
             "attendees",
             "created_by",
+            "created_by_username",
         ]
         read_only_fields = [
             "hub",

@@ -246,7 +246,7 @@ export default function RadixSidebarLayout({ children }) {
       </Sidebar>
 
       {/* ---------- MAIN ---------- */}
-      <SidebarInset>
+      <SidebarInset className="min-w-0 overflow-x-hidden">
         <header className="flex h-16 items-center gap-3 px-4 border-b">
           <SidebarTrigger className="text-[#432dd7]" />
           <Separator orientation="vertical" className="h-4" />
@@ -254,16 +254,16 @@ export default function RadixSidebarLayout({ children }) {
             <BreadcrumbList>
               <BreadcrumbItem>
                 <BreadcrumbPage className="text-[#432dd7] font-semibold">
-                  Dashboard
+                  Wocco Company
                 </BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
         </header>
+<main className="p-6 bg-gray-50 dark:bg-[#080818] min-h-[calc(100vh-64px)] min-w-0 overflow-x-hidden">
+  {children}
+</main>
 
-        <main className="p-6 bg-gray-50 dark:bg-[#080818] min-h-[calc(100vh-64px)]">
-          {children}
-        </main>
       </SidebarInset>
     </SidebarProvider>
   );

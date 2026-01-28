@@ -18,10 +18,31 @@ export default function HubsList() {
     loadData();
   }, []);
 
+const handleHubClick = (hub, isAdmin) => {
+  if (hub.membership_status === "approved" || isAdmin) {
+    navigate(`/hubs/${hub.id}`);
+  } else {
+    navigate(`/hubs/${hub.id}/about`);
+  }
+};
+
+
   const requestJoin = async (hubId) => {
     await api.post(`/hubs/${hubId}/request_join/`);
     await loadData();
   };
+
+  const cancelRequest = async (hubId) => {
+  await api.post(`/hubs/${hubId}/cancel_request/`);
+  await loadData();
+};
+
+const leaveHub = async (hubId) => {
+  if (!window.confirm("Are you sure you want to leave this hub?")) return;
+  await api.post(`/hubs/${hubId}/leave_hub/`);
+  await loadData();
+};
+
 
   if (!user)
     return (
@@ -48,10 +69,15 @@ export default function HubsList() {
           const isAdmin = hub.admin === user.username;
 
           return (
-            <div
-              key={hub.id}
-              className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300"
-            >
+<div
+  key={hub.id}
+  onClick={() => handleHubClick(hub, isAdmin)}
+  className="group bg-white rounded-3xl overflow-hidden
+             shadow-sm hover:shadow-xl
+             transition-all duration-300 cursor-pointer"
+>
+
+      
               {/* Image Header */}
               <div className="relative h-44 overflow-hidden">
                 <img
@@ -61,7 +87,7 @@ export default function HubsList() {
                 />
 
                 {/* Gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />
 
                 {/* Status Badge */}
                 <div className="absolute top-3 left-3">
@@ -87,35 +113,75 @@ export default function HubsList() {
                   {hub.description || "No description provided."}
                 </p>
 
-                {/* Actions */}
-                <div className="mt-5 space-y-2">
-                  {!hub.membership_status && !isAdmin && (
-                    <PrimaryButton onClick={() => requestJoin(hub.id)}>
-                      Request to Join
-                    </PrimaryButton>
-                  )}
 
-                  {hub.membership_status === "pending" && (
-                    <DisabledButton>Awaiting Approval</DisabledButton>
-                  )}
+{/* Actions */}
+<div className="mt-5 flex flex-col gap-2">
+  {/* Not a member yet */}
+  {!hub.membership_status && !isAdmin && (
+    <PrimaryButton
+      onClick={(e) => {
+        e.stopPropagation();
+        requestJoin(hub.id);
+      }}
+    >
+      Request to Join
+    </PrimaryButton>
+  )}
 
-                  {hub.membership_status === "approved" && (
-                    <SecondaryButton
-                      onClick={() => navigate(`/hubs/${hub.id}`)}
-                    >
-                      Enter Hub →
-                    </SecondaryButton>
-                  )}
+  {/* Pending request */}
+  {hub.membership_status === "pending" && !isAdmin && (
+    <>
+      <DisabledButton>Awaiting Approval</DisabledButton>
+      <SecondaryButton
+        onClick={(e) => {
+          e.stopPropagation();
+          cancelRequest(hub.id);
+        }}
+      >
+        Cancel Request
+      </SecondaryButton>
+    </>
+  )}
 
-{isAdmin && (
-  <GhostButton
-    onClick={() => navigate(`/manage-hubs/${hub.id}`)}
-  >
-    Manage Hub
-  </GhostButton>
-)}
+  {/* Approved member or admin */}
+  {(hub.membership_status === "approved" || isAdmin) && (
+    <>
+      {/* Enter Hub button (everyone who’s a member/admin) */}
+      <SecondaryButton
+        onClick={(e) => {
+          e.stopPropagation();
+          navigate(`/hubs/${hub.id}`);
+        }}
+      >
+        Enter Hub →
+      </SecondaryButton>
 
-                </div>
+      {/* Admin sees Manage Hub, member sees Leave Hub */}
+      {isAdmin ? (
+        <GhostButton
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/manage-hubs/${hub.id}`);
+          }}
+        >
+          Manage Hub
+        </GhostButton>
+      ) : (
+        <SecondaryButton
+          onClick={(e) => {
+            e.stopPropagation();
+            leaveHub(hub.id);
+          }}
+        >
+          Leave Hub
+        </SecondaryButton>
+      )}
+    </>
+  )}
+</div>
+
+
+
               </div>
             </div>
           );

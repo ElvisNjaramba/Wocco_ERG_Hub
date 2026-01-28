@@ -9,6 +9,7 @@ import UserDashboard from "./pages/UserDashboard";
 import Profile from "./pages/Profile";
 import { ChangePassword } from "./pages/Password";
 import HubsList from "./pages/HubsList";
+import HubAbout from "./pages/HubAbout";
 import CreateHub from "./pages/CreateHub";
 import ManageHub from "./pages/ManageHub";
 import CreateEventPage from "./pages/CreateEventPage";
@@ -36,7 +37,8 @@ export default function App() {
             <Route path="/user/dashboard" element={<UserDashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/change-password" element={<ChangePassword />} />
-            <Route path="/hubs/list" element={<HubsList />} />      
+            <Route path="/hubs/list" element={<HubsList />} />   
+            <Route path="/hubs/:hubId/about" element={<HubAbout />} />   
             <Route path="/hubs/create" element={<CreateHub />} />        
             <Route path="/manage-hubs/:hubId" element={<ManageHub />} />
             <Route path="/events/create" element={<CreateEventPage />} />

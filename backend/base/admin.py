@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import EventAttendance, Hub, HubMembership, Message, Event
+from .models import BanHistory, EventAttendance, Hub, HubMembership, Message, Event
 
 
 class HubMembershipInline(admin.TabularInline):
@@ -10,17 +10,33 @@ class HubMembershipInline(admin.TabularInline):
     can_delete = True
 
 
+class BanHistoryInline(admin.TabularInline):
+    model = BanHistory
+    extra = 0
+    autocomplete_fields = ("user", "banned_by")
+    readonly_fields = ("banned_at", "unbanned_at")
+    can_delete = False  # Usually you don't want admins deleting ban history
+
 @admin.register(Hub)
 class HubAdmin(admin.ModelAdmin):
     list_display = ("name", "admin", "created_at", "member_count")
     search_fields = ("name", "admin__username")
     list_filter = ("created_at",)
     autocomplete_fields = ("admin",)
-    inlines = [HubMembershipInline]
+    inlines = [HubMembershipInline, BanHistoryInline]  # Add ban history inline
 
     def member_count(self, obj):
         return obj.members.count()
     member_count.short_description = "Members"
+
+# --- New BanHistory admin for standalone view ---
+@admin.register(BanHistory)
+class BanHistoryAdmin(admin.ModelAdmin):
+    list_display = ("user", "hub", "banned_by", "banned_at", "unbanned_at")
+    list_filter = ("hub", "banned_at", "unbanned_at")
+    search_fields = ("user__username", "hub__name", "banned_by__username")
+    autocomplete_fields = ("user", "hub", "banned_by")
+    readonly_fields = ("banned_at", "unbanned_at")
 
 
 @admin.register(HubMembership)

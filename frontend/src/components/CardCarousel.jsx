@@ -117,35 +117,116 @@ class Media {
   }
 }
 
-export default function CardCarousel({ items, onItemClick }) {
-  return (
-    <div className="relative">
-      <div
-        className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide"
-        style={{ scrollBehavior: "smooth" }}
-      >
-        {items.map((item) => (
-          <div
-            key={item.eventId}
-            onClick={() => onItemClick?.(item)}
-            className="min-w-[280px] max-w-[280px] snap-start cursor-pointer
-                       bg-white rounded-xl shadow-md hover:shadow-xl transition"
-          >
-            <img
-              src={item.image}
-              alt={item.title}
-              className="h-40 w-full object-cover rounded-t-xl"
-            />
+export default function CardCarousel({
+  items = [],
+  attendingStatus = {},
+  membershipStatus = {},
+  onAttend,
+  onCancel,
+  onItemClick,
+}) {
+  if (!items.length) {
+    return (
+      <p className="text-center mt-10 text-gray-500">
+        No upcoming events
+      </p>
+    );
+  }
 
-            <div className="p-4">
-              <h3 className="font-semibold text-lg truncate">{item.title}</h3>
-              <p className="text-sm text-gray-500">{item.hubName}</p>
-              <p className="text-xs text-gray-400 mt-1">
-                {new Date(item.startTime).toLocaleString()}
-              </p>
+  return (
+    <div className="relative w-full overflow-hidden">
+      <div
+        className="
+          flex gap-6
+          overflow-x-auto
+          pb-4
+          snap-x snap-mandatory
+          scrollbar-hide
+        "
+      >
+        {items.map((event) => {
+          const isAttending = attendingStatus[event.id];
+          const isMember = membershipStatus[event.hub] ?? true;
+
+          return (
+            <div
+              key={event.eventId ?? event.id}
+              className="
+                min-w-[320px] max-w-[320px]
+                bg-white rounded-xl shadow-md
+                hover:shadow-xl transition
+                flex-shrink-0
+              "
+            >
+              <img
+                src={event.image}
+                alt={event.title}
+                className="h-48 w-full object-cover rounded-t-xl"
+              />
+
+              <div className="p-4">
+                <h3 className="text-lg font-semibold truncate">
+                  {event.title}
+                </h3>
+
+                <p className="text-sm text-gray-600 line-clamp-2 mt-1">
+                  {event.description}
+                </p>
+
+                <p className="text-xs text-gray-500 mt-2">
+                  🕒 {new Date(event.start_time).toLocaleString()}
+                </p>
+
+                <p className="text-xs text-gray-400 mt-1">
+                  Hub: {event.hubName}
+                </p>
+
+                <p className="text-xs text-gray-400 mt-1">
+                  👥 {event.attendees_count ?? 0} attending
+                </p>
+
+                {/* ACTION BUTTON */}
+<div className="mt-3">
+  {!isMember ? (
+    <button
+      className="w-full px-3 py-2 rounded-lg bg-purple-600 text-white text-sm"
+      onClick={() => window.location.href = `/hubs/${event.hub}/about`}
+    >
+      Join hub to attend
+    </button>
+  ) : isAttending ? (
+    <button
+      className="w-full px-3 py-2 rounded-lg bg-red-500 text-white text-sm"
+      onClick={() => onCancel?.(event)}
+    >
+      Cancel Attendance
+    </button>
+  ) : (
+    <button
+      className="w-full px-3 py-2 rounded-lg bg-green-600 text-white text-sm"
+      onClick={() => onAttend?.(event)}
+    >
+      Attend Event
+    </button>
+  )}
+</div>
+
+
+                {/* CARD CLICK */}
+{isMember && (
+  <button
+    onClick={() => onItemClick?.(event)}
+    className="mt-2 text-xs text-[#432dd7] hover:underline w-full"
+  >
+    View hub →
+  </button>
+)}
+
+
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

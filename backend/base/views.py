@@ -8,7 +8,7 @@ from django.core.exceptions import PermissionDenied
 
 from rest_framework.decorators import action, api_view, permission_classes
 
-from .models import Hub, HubMembership, Message, Event, EventAttendance, MessageHighlight
+from .models import Hub, HubMembership, Message, Event, EventAttendance, MessageHighlight, BanHistory
 from .serializers import EventDetailSerializer, EventSerializer, HubDetailSerializer, HubSerializer, HubMembershipSerializer, MessageSerializer
 from django.utils import timezone
 
@@ -28,12 +28,22 @@ class DashboardViewSet(ViewSet):
             return Response({"role": "superuser"})
         return Response({"role": "user"})
 
+from rest_framework import viewsets, filters
+from rest_framework.pagination import LimitOffsetPagination
 
-
+from django.db.models import Count,Q
 class HubViewSet(viewsets.ModelViewSet):
-    queryset = Hub.objects.all()
+    queryset = Hub.objects.annotate(
+        members_count=Count(
+            "hubmembership",
+            filter=Q(hubmembership__is_approved=True)
+        )
+    )
     serializer_class = HubSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = LimitOffsetPagination
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["name", "admin__username"]
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -62,9 +72,12 @@ class HubViewSet(viewsets.ModelViewSet):
             hubs = Hub.objects.all()
         else:
             hubs = Hub.objects.filter(
+            Q(admin=user) |
+            Q(
                 hubmembership__user=user,
                 hubmembership__is_approved=True
             )
+        ).distinct()
 
         data = []
         now = timezone.now()
@@ -92,9 +105,12 @@ class HubViewSet(viewsets.ModelViewSet):
             hubs = Hub.objects.all()
         else:
             hubs = Hub.objects.filter(
-                hubmembership__user=user,
-                hubmembership__is_approved=True
-            )
+                Q(admin=user) |
+                Q(
+                    hubmembership__user=user,
+                    hubmembership__is_approved=True
+                )
+            ).distinct()
 
         serializer = HubSerializer(hubs, many=True, context={"request": request})
         return Response(serializer.data)
@@ -135,8 +151,6 @@ class HubViewSet(viewsets.ModelViewSet):
         ])
 
 
-
-
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def ban_member(self, request, pk=None):
         hub = self.get_object()
@@ -145,16 +159,49 @@ class HubViewSet(viewsets.ModelViewSet):
             return Response({"error": "Not allowed"}, status=403)
 
         user_id = request.data.get("user_id")
-
         if user_id == request.user.id:
             return Response({"error": "Admin cannot ban themselves"}, status=400)
 
-        HubMembership.objects.filter(
+        # Remove membership
+        HubMembership.objects.filter(hub=hub, user_id=user_id).delete()
+
+        # Store ban
+        BanHistory.objects.update_or_create(
             hub=hub,
-            user_id=user_id
-        ).delete()
+            user_id=user_id,
+            defaults={
+                "banned_by": request.user,
+                "banned_at": timezone.now(),
+                "unbanned_at": None
+            }
+        )
 
         return Response({"message": "Member banned"})
+    
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
+    def reapprove_member(self, request, pk=None):
+        hub = self.get_object()
+
+        if hub.admin != request.user:
+            return Response({"error": "Not allowed"}, status=403)
+
+        user_id = request.data.get("user_id")
+
+        BanHistory.objects.filter(hub=hub, user_id=user_id).delete()
+
+        # re-add membership
+        HubMembership.objects.update_or_create(
+            hub=hub,
+            user_id=user_id,
+            defaults={
+                "is_approved": True,
+                "approved_at": timezone.now(),
+            }
+        )
+
+        return Response({"message": "User re-approved"})
+
+
     
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def ban_history(self, request, pk=None):
@@ -174,6 +221,55 @@ class HubViewSet(viewsets.ModelViewSet):
                 "banned_by": b.banned_by.username
             } for b in history
         ])
+
+        # Cancel a join request (by the user)
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
+    def cancel_request(self, request, pk=None):
+        hub = self.get_object()
+        membership = HubMembership.objects.filter(hub=hub, user=request.user, is_approved=False).first()
+        if not membership:
+            return Response({"error": "No pending request found"}, status=404)
+        membership.delete()
+        return Response({"message": "Join request canceled"}, status=200)
+
+    # Deny a user's request (by admin)
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
+    def deny_member(self, request, pk=None):
+        hub = self.get_object()
+        if hub.admin != request.user:
+            return Response({"error": "Only admin can deny requests"}, status=403)
+
+        user_id = request.data.get("user_id")
+        try:
+            membership = HubMembership.objects.get(hub=hub, user_id=user_id, is_approved=False)
+            membership.delete()
+            return Response({"message": "Request denied"}, status=200)
+        except HubMembership.DoesNotExist:
+            return Response({"error": "Pending request not found"}, status=404)
+
+    # Leave a hub (by the user)
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
+    def leave_hub(self, request, pk=None):
+        hub = self.get_object()
+        if hub.admin == request.user:
+            return Response({"error": "Admin cannot leave the hub"}, status=400)
+
+        membership = HubMembership.objects.filter(hub=hub, user=request.user, is_approved=True).first()
+        if not membership:
+            return Response({"error": "You are not a member of this hub"}, status=404)
+
+        membership.delete()
+        return Response({"message": "Left the hub"}, status=200)
+    
+    @action(detail=True, methods=["delete"], permission_classes=[IsAuthenticated])
+    def delete_hub(self, request, pk=None):
+        hub = self.get_object()
+
+        if hub.admin != request.user:
+            return Response({"error": "Only admin can delete hub"}, status=403)
+
+        hub.delete()
+        return Response({"message": "Hub deleted successfully"}, status=204)
 
 
 
@@ -345,19 +441,32 @@ def me(request):
         "username": request.user.username,
         "is_superuser": request.user.is_superuser,
     })
-
+from django.db.models import Q
+from django.utils.dateparse import parse_datetime, parse_date
 class EventViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
+    pagination_class = LimitOffsetPagination
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["title", "hub__name", "created_by__username"]
 
     def get_queryset(self):
+        qs = Event.objects.all().order_by("start_time")
+
         hub_id = self.request.query_params.get("hub")
-        qs = Event.objects.all()
+        start_date = self.request.query_params.get("start_date")
+        end_date = self.request.query_params.get("end_date")
 
         if hub_id:
             qs = qs.filter(hub_id=hub_id)
 
-        return qs.order_by("start_time")
+        if start_date:
+            qs = qs.filter(start_time__date__gte=parse_date(start_date))
+
+        if end_date:
+            qs = qs.filter(start_time__date__lte=parse_date(end_date))
+
+        return qs
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -445,6 +554,7 @@ class EventViewSet(viewsets.ModelViewSet):
             "attendees_count": event.attendances.filter(attending=True).count()
         })
     
+    
     @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated])
     def update_event(self, request, pk=None):
         event = self.get_object()
@@ -470,9 +580,13 @@ class EventViewSet(viewsets.ModelViewSet):
         # 👤 Regular users: only approved hubs
         else:
             events = Event.objects.filter(
-                start_time__gte=now,
-                hub__hubmembership__user=request.user,
-                hub__hubmembership__is_approved=True,
+                start_time__gte=now
+            ).filter(
+                Q(hub__admin=request.user) |
+                Q(
+                    hub__hubmembership__user=request.user,
+                    hub__hubmembership__is_approved=True
+                )
             ).select_related("hub").order_by("start_time")
 
         serializer = EventSerializer(
@@ -481,6 +595,18 @@ class EventViewSet(viewsets.ModelViewSet):
             context={"request": request}
         )
         return Response(serializer.data)
+    
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
+    def delete_event(self, request, pk=None):
+        event = self.get_object()
+
+        if event.hub.admin != request.user:
+            return Response({"error": "Only hub admin can delete events"}, status=403)
+
+        event.delete()
+        return Response({"message": "Event deleted"}, status=200)
+
+
 
 from django.contrib.auth.models import User
 @api_view(["GET"])

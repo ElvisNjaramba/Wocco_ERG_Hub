@@ -78,10 +78,11 @@ class HubMembershipSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    sender = serializers.StringRelatedField(read_only=True)
+    sender = serializers.SerializerMethodField()
     media = serializers.FileField(required=False, allow_null=True)
     media_url = serializers.SerializerMethodField()
-
+    replies = serializers.SerializerMethodField()
+    
     class Meta:
         model = Message
         fields = [
@@ -103,10 +104,26 @@ class MessageSerializer(serializers.ModelSerializer):
 
     def get_replies(self, obj):
         return MessageSerializer(
-            obj.replies.all().order_by("timestamp"),
+            obj.replies.select_related("sender").order_by("timestamp"),
             many=True,
             context=self.context,
         ).data
+    
+    def get_sender(self, obj):
+        request = self.context.get("request")
+
+        return {
+            "id": obj.sender.id,
+            "username": obj.sender.username,
+            "avatar_url": (
+                request.build_absolute_uri(obj.sender.profile.avatar.url)
+                if hasattr(obj.sender, "profile")
+                and obj.sender.profile.avatar
+                and request
+                else None
+            ),
+        }
+
 
 class EventSerializer(serializers.ModelSerializer):
     attendees_count = serializers.SerializerMethodField()

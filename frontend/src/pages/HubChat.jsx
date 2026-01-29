@@ -48,11 +48,13 @@ const MessageItem = ({ msg, onReply, parent, template = "bubble", messageMap }) 
   const itemData = {
     text: msg.content,
     author: {
-      id: msg.sender_id,
-      name: msg.sender,
-      avatarUrl: msg.avatar_url || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=face",
+      id: msg.sender.id,
+      name: msg.sender.username,
+      avatarUrl: msg.sender.avatar_url
     },
-    timestamp: new Date(msg.created_at),
+
+    timestamp: new Date(msg.timestamp),
+
     media_url: msg.media_url,
   };
 
@@ -88,13 +90,14 @@ const MessageItem = ({ msg, onReply, parent, template = "bubble", messageMap }) 
       ref={ref} 
       className="group relative mb-4 transition-all duration-200 hover:bg-gray-50/50 rounded-2xl p-2"
     >
-      <div className="flex gap-3">
+      <div className="flex gap-3 w-full">
+
         {/* Avatar */}
         <div className="flex-shrink-0">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#432dd7] to-purple-500 flex items-center justify-center overflow-hidden border-2 border-white shadow-lg">
             {itemData.author.avatarUrl ? (
               <img 
-                src={itemData.author.avatarUrl} 
+                src={itemData.author.avatarUrl}
                 alt={itemData.author.name}
                 className="w-full h-full object-cover"
               />
@@ -105,7 +108,11 @@ const MessageItem = ({ msg, onReply, parent, template = "bubble", messageMap }) 
         </div>
 
         {/* Message Content */}
-        <div className="flex-1 min-w-0">
+        {/* <div className="flex-1 min-w-0"> */}
+
+        <div className="flex flex-col min-w-0 flex-1">
+
+
           {/* Quoted parent */}
           {parent && (
             <div
@@ -115,7 +122,7 @@ const MessageItem = ({ msg, onReply, parent, template = "bubble", messageMap }) 
               <div className="flex items-center gap-2">
                 <Reply className="w-3 h-3 text-[#432dd7]" />
                 <span className="text-xs font-semibold text-[#432dd7]">
-                  {parent.sender}
+                  {parent.sender.username}
                 </span>
                 <span className="text-xs text-gray-500 truncate">
                   {parent.content?.slice(0, 80)}
@@ -143,8 +150,12 @@ const MessageItem = ({ msg, onReply, parent, template = "bubble", messageMap }) 
 
           {/* Message Body */}
           <div className="relative">
-            <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 hover:border-gray-300 transition-all group-hover:shadow-md">
-              <TemplateComponent item={itemData} />
+            <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-200 hover:border-gray-300 transition-all group-hover:shadow-md max-w-[85%] w-full">
+
+              <div className="whitespace-pre-wrap break-words break-all text-sm text-gray-900 leading-relaxed">
+                <TemplateComponent item={itemData} />
+              </div>
+
               
               {/* Media Attachment */}
               {msg.media_url && (
@@ -201,6 +212,7 @@ const MessageItem = ({ msg, onReply, parent, template = "bubble", messageMap }) 
         </div>
       </div>
     </div>
+
   );
 };
 

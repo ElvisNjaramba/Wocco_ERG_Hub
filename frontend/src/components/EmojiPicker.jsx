@@ -1,38 +1,50 @@
 import { useEffect, useRef } from "react";
 import { EMOJIS } from "./emojiList";
 
-export default function EmojiPicker({ onSelect, onClose }) {
-  const ref = useRef(null);
-  const uniqueEmojis = [...new Set(EMOJIS)];
+export default function EmojiPicker({ onSelect, onClose, triggerRef }) {
+  const pickerRef = useRef(null);
 
-  // close on outside click
   useEffect(() => {
     const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) {
-        onClose();
-      }
+      // click inside picker → ignore
+      if (pickerRef.current?.contains(e.target)) return;
+
+      // click on emoji button → ignore (toggle handles it)
+      if (triggerRef?.current?.contains(e.target)) return;
+
+      // true outside click
+      onClose();
     };
+
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
+  }, [onClose, triggerRef]);
 
   return (
     <div
-      ref={ref}
-      className="absolute bottom-14 right-0 z-50 w-64 bg-white border border-gray-200 rounded-2xl shadow-xl p-3"
+      ref={pickerRef}
+      className="
+        fixed bottom-24 right-6 z-[9999]
+        w-96 bg-white border border-gray-200
+        rounded-2xl shadow-2xl p-3
+      "
     >
-      <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto">
-{uniqueEmojis.map((emoji) => (
-  <button
-    key={emoji}
-    onClick={() => onSelect(emoji)}
-    className="text-xl hover:bg-gray-100 rounded-lg p-1 transition"
-  >
-    {emoji}
-  </button>
-))}
+      <div className="text-sm font-semibold text-gray-700 px-2 pb-2">
+        Pick emojis
+      </div>
 
+      <div className="grid grid-cols-6 gap-2 max-h-72 overflow-y-auto px-1">
+        {EMOJIS.map((emoji) => (
+          <button
+            key={emoji}
+            onClick={() => onSelect(emoji)}
+            className="text-2xl p-2 rounded-xl hover:bg-gray-100 active:scale-95 transition"
+          >
+            {emoji}
+          </button>
+        ))}
       </div>
     </div>
   );
 }
+

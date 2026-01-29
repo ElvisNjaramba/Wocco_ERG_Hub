@@ -112,29 +112,31 @@ class HubChatConsumer(AsyncWebsocketConsumer):
         )
 
     async def disconnect(self, close_code):
-        # Remove from group
-        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+        # Only remove from group if room_group_name exists
+        if hasattr(self, "room_group_name"):
+            await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
-        # Remove user from Redis set
-        await self.redis.srem(self.redis_key, self.user.username)
+            # Remove user from Redis set
+            if hasattr(self, "redis") and hasattr(self, "redis_key"):
+                await self.redis.srem(self.redis_key, self.user.username)
 
-        # Broadcast offline
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                "type": "presence_event",
-                "action": "offline",
-                "user": self.user_payload(),
-            }
-        )
+            # Broadcast offline
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "presence_event",
+                    "action": "offline",
+                    "user": self.user_payload(),
+                }
+            )
 
-    async def presence_update(self, event):
+
+    async def presence_event(self, event):
         await self.send(text_data=json.dumps({
             "type": "presence",
             "action": event["action"],
             "user": event["user"],
         }))
-
 
     async def receive(self, text_data):
         data = json.loads(text_data)

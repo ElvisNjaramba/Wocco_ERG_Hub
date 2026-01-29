@@ -220,6 +220,7 @@ export default function HubChat({ template = "bubble" }) {
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const textareaRef = useRef(null);
+const emojiButtonRef = useRef(null);
 
 
   const socketRef = useRef(null);
@@ -377,27 +378,25 @@ const handleTyping = () => {
   };
 
 
-  const insertEmoji = (emoji) => {
+const insertEmoji = (emoji) => {
   const textarea = textareaRef.current;
   if (!textarea) return;
 
   const start = textarea.selectionStart;
   const end = textarea.selectionEnd;
 
-  const newText =
-    text.slice(0, start) + emoji + text.slice(end);
-
+  const newText = text.slice(0, start) + emoji + text.slice(end);
   setText(newText);
 
-  // restore cursor position
-  setTimeout(() => {
+  requestAnimationFrame(() => {
     textarea.focus();
     textarea.selectionStart = textarea.selectionEnd =
       start + emoji.length;
-  }, 0);
+  });
 
-  setShowEmojiPicker(false);
+  // ❌ DO NOT close picker here
 };
+
 
 
   // Build parent map for quoted messages
@@ -626,21 +625,28 @@ const handleTyping = () => {
                   <div className="flex items-center justify-between mt-3 text-sm text-gray-500">
                     <div className="flex items-center gap-4">
 <div className="relative">
-  <button
-    type="button"
-    onClick={() => setShowEmojiPicker((v) => !v)}
-    className="flex items-center gap-2 hover:text-gray-700 transition-colors"
-  >
-    <Smile className="w-4 h-4" />
-    <span className="hidden sm:inline">Emoji</span>
-  </button>
+<button
+  ref={emojiButtonRef}
+  type="button"
+  onClick={() => setShowEmojiPicker(prev => !prev)}
+  className={`flex items-center gap-2 transition-colors ${
+    showEmojiPicker ? "text-[#432dd7]" : "hover:text-gray-700"
+  }`}
+>
+  <Smile className="w-4 h-4" />
+  <span className="hidden sm:inline">Emoji</span>
+</button>
 
-  {showEmojiPicker && (
-    <EmojiPicker
-      onSelect={insertEmoji}
-      onClose={() => setShowEmojiPicker(false)}
-    />
-  )}
+
+
+{showEmojiPicker && (
+  <EmojiPicker
+    onSelect={insertEmoji}
+    onClose={() => setShowEmojiPicker(false)}
+    triggerRef={emojiButtonRef}
+  />
+)}
+
 </div>
 
 

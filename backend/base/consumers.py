@@ -216,8 +216,6 @@ class HubChatConsumer(AsyncWebsocketConsumer):
             "message_id": event["message_id"]
         }))
 
-
-
     @database_sync_to_async
     def is_approved_member(self):
         from .models import Hub  # import inside method if circular

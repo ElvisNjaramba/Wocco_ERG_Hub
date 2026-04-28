@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import { messageTemplates } from "../components/MessageTemplates";
 import EmojiPicker from "../components/EmojiPicker";
@@ -9,10 +9,8 @@ import {
   X,
   Reply,
   ChevronDown,
-  Image as ImageIcon,
   FileText,
   Smile,
-  Users,
   CheckCircle,
   User,
   Maximize2,
@@ -30,7 +28,6 @@ const isImage = (url) => /\.(jpg|jpeg|png|gif|webp|avif|svg)$/i.test(url || "");
 const Avatar = ({ user, size = "md" }) => {
   const sz = size === "sm" ? "w-8 h-8 text-xs" : "w-9 h-9 text-sm";
   const initials = user?.username?.slice(0, 2).toUpperCase() || "?";
-  // stable color based on username
   const colors = [
     "bg-rose-500", "bg-orange-500", "bg-amber-500",
     "bg-emerald-500", "bg-teal-500", "bg-cyan-500",
@@ -46,7 +43,40 @@ const Avatar = ({ user, size = "md" }) => {
   );
 };
 
+/* ---------- ActionBtn ---------- */
+const ActionBtn = ({ icon, title, onClick, color }) => {
+  const hover = color === "red"
+    ? "hover:text-red-400 hover:bg-red-500/10 text-zinc-400"
+    : color === "amber"
+      ? "hover:text-amber-400 hover:bg-amber-500/10 text-zinc-400"
+      : "hover:text-indigo-400 hover:bg-indigo-500/10 text-zinc-400";
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${hover}`}
+    >
+      {icon}
+    </button>
+  );
+};
+
+/* ---------- ToolbarBtn ---------- */
+const ToolbarBtn = ({ icon, label, onClick, active, ...rest }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+      active ? "text-indigo-400 bg-indigo-500/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/60"
+    }`}
+    {...rest}
+  >
+    {icon}
+    <span className="hidden sm:inline">{label}</span>
+  </button>
+);
+
 /* ---------- MessageItem ---------- */
+// FIX: action buttons are always visible (removed group-hover opacity pattern)
 const MessageItem = ({ msg, onReply, onEdit, onDelete, parent, messageMap }) => {
   const ref = useRef(null);
 
@@ -69,7 +99,7 @@ const MessageItem = ({ msg, onReply, onEdit, onDelete, parent, messageMap }) => 
 
   if (msg.is_deleted) {
     return (
-      <div ref={ref} className="flex items-start gap-3 px-4 py-2 group">
+      <div ref={ref} className="flex items-start gap-3 px-4 py-2">
         <div className="w-9 h-9 rounded-full bg-zinc-700 flex items-center justify-center flex-shrink-0">
           <User className="w-4 h-4 text-zinc-500" />
         </div>
@@ -87,23 +117,19 @@ const MessageItem = ({ msg, onReply, onEdit, onDelete, parent, messageMap }) => 
   return (
     <div
       ref={ref}
-      className="group flex items-start gap-3 px-4 py-2 hover:bg-zinc-800/40 rounded-lg transition-colors duration-150 relative"
+      className="flex items-start gap-3 px-4 py-2 hover:bg-zinc-800/40 rounded-lg transition-colors duration-150 relative"
     >
-      {/* Avatar */}
       <div className="mt-0.5">
         <Avatar user={msg.sender} />
       </div>
 
-      {/* Body */}
-      <div className="flex-1 min-w-0">
-        {/* Header */}
+      <div className="flex-1 min-w-0 pr-24">
         <div className="flex items-baseline gap-2 mb-0.5">
           <span className="font-semibold text-sm text-zinc-100">{msg.sender?.username}</span>
           <span className="text-[11px] text-zinc-500">{time}</span>
           {msg.is_edited && <span className="text-[11px] text-zinc-600 italic">(edited)</span>}
         </div>
 
-        {/* Quoted parent */}
         {parent && (
           <div
             onClick={handleQuotedClick}
@@ -121,12 +147,10 @@ const MessageItem = ({ msg, onReply, onEdit, onDelete, parent, messageMap }) => 
           </div>
         )}
 
-        {/* Text */}
         <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap break-words">
           {msg.content}
         </p>
 
-        {/* Media */}
         {msg.media_url && (
           <div className="mt-2 rounded-xl overflow-hidden max-w-xs border border-zinc-700">
             {isImage(msg.media_url) ? (
@@ -158,8 +182,8 @@ const MessageItem = ({ msg, onReply, onEdit, onDelete, parent, messageMap }) => 
         )}
       </div>
 
-      {/* Hover actions */}
-      <div className="absolute right-3 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-0.5">
+      {/* FIX: always visible action buttons, no group-hover */}
+      <div className="absolute right-3 top-2 flex items-center gap-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-0.5">
         <ActionBtn icon={<Reply className="w-3.5 h-3.5" />} title="Reply" onClick={() => onReply(msg)} />
         {isOwner && (
           <>
@@ -172,31 +196,14 @@ const MessageItem = ({ msg, onReply, onEdit, onDelete, parent, messageMap }) => 
   );
 };
 
-const ActionBtn = ({ icon, title, onClick, color }) => {
-  const hover = color === "red"
-    ? "hover:text-red-400 hover:bg-red-500/10"
-    : color === "amber"
-    ? "hover:text-amber-400 hover:bg-amber-500/10"
-    : "hover:text-indigo-400 hover:bg-indigo-500/10";
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={`w-7 h-7 flex items-center justify-center rounded text-zinc-400 transition-colors ${hover}`}
-    >
-      {icon}
-    </button>
-  );
-};
-
-/* ---------- Typing indicator ---------- */
+/* ---------- TypingIndicator ---------- */
 const TypingIndicator = ({ typingUsers }) => {
   if (!typingUsers?.length) return null;
   const label = typingUsers.length === 1
     ? `${typingUsers[0]} is typing`
     : typingUsers.length === 2
-    ? `${typingUsers[0]} and ${typingUsers[1]} are typing`
-    : "Several people are typing";
+      ? `${typingUsers[0]} and ${typingUsers[1]} are typing`
+      : "Several people are typing";
   return (
     <div className="flex items-center gap-2 px-4 py-1.5 text-xs text-zinc-500">
       <div className="flex gap-1">
@@ -209,7 +216,247 @@ const TypingIndicator = ({ typingUsers }) => {
   );
 };
 
-/* ---------- main HubChat ---------- */
+/* ---------- ReplyBar ---------- */
+const ReplyBar = ({ replyTo, setReplyTo }) => replyTo ? (
+  <div className="px-4 py-2.5 border-t border-zinc-800 bg-zinc-900/60 flex items-center justify-between flex-shrink-0">
+    <div className="flex items-center gap-2.5 min-w-0">
+      <div className="w-0.5 h-8 bg-indigo-500 rounded-full flex-shrink-0" />
+      <div className="min-w-0">
+        <div className="text-xs font-semibold text-indigo-400">
+          Replying to {typeof replyTo.sender === "object" ? replyTo.sender?.username : replyTo.sender}
+        </div>
+        <div className="text-xs text-zinc-500 truncate max-w-xs">{replyTo.content}</div>
+      </div>
+    </div>
+    <button onClick={() => setReplyTo(null)} className="p-1.5 rounded-lg hover:bg-zinc-800 transition-colors ml-2">
+      <X className="w-4 h-4 text-zinc-500" />
+    </button>
+  </div>
+) : null;
+
+/* ---------- EditBanner ---------- */
+const EditBanner = ({ editingMessage, cancelEdit }) => editingMessage ? (
+  <div className="px-4 py-2.5 border-t border-amber-900/40 bg-amber-900/10 flex items-center justify-between flex-shrink-0">
+    <div className="flex items-center gap-2.5">
+      <Edit2 className="w-4 h-4 text-amber-400" />
+      <div>
+        <div className="text-xs font-semibold text-amber-400">Editing message</div>
+        <div className="text-xs text-zinc-500">Press <kbd className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-400">Esc</kbd> to cancel</div>
+      </div>
+    </div>
+    <button onClick={cancelEdit} className="p-1.5 rounded-lg hover:bg-amber-900/20 transition-colors">
+      <X className="w-4 h-4 text-amber-500" />
+    </button>
+  </div>
+) : null;
+
+/* ---------- InputArea ---------- */
+// FIX: defined OUTSIDE HubChat so it never remounts on re-render (was causing one-letter-at-a-time typing)
+const InputArea = ({
+  text, setText, file, setFile, editingMessage, sendMessage,
+  handleTyping, handleKeyDown, textareaRef, emojiButtonRef,
+  fileInputRef, showEmojiPicker, setShowEmojiPicker, insertEmoji,
+  numericHubId,
+}) => (
+  <div className="flex-shrink-0 px-4 pb-4 pt-3">
+    <div className={`rounded-xl border transition-colors ${editingMessage ? "border-amber-700/60 bg-zinc-800" : "border-zinc-700 bg-zinc-800 focus-within:border-indigo-600/70"}`}>
+      <textarea
+        value={text}
+        ref={textareaRef}
+        onChange={(e) => { setText(e.target.value); handleTyping(); }}
+        onKeyDown={handleKeyDown}
+        placeholder={editingMessage ? "Edit your message…" : `Message #hub-${numericHubId}`}
+        className="w-full bg-transparent px-4 pt-3 pb-2 text-sm text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none min-h-[44px] max-h-36"
+        rows={2}
+      />
+      <div className="flex items-center justify-between px-3 pb-2.5">
+        <div className="flex items-center gap-1">
+          <div className="relative">
+            <ToolbarBtn
+              ref={emojiButtonRef}
+              icon={<Smile className="w-4 h-4" />}
+              label="Emoji"
+              onClick={() => setShowEmojiPicker((v) => !v)}
+              active={showEmojiPicker}
+            />
+            {showEmojiPicker && (
+              <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiButtonRef} />
+            )}
+          </div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={(e) => setFile(e.target.files[0])}
+            className="hidden"
+            id="file-upload-input"
+          />
+          <label
+            htmlFor="file-upload-input"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/60 cursor-pointer transition-colors text-xs font-medium"
+          >
+            <Paperclip className="w-4 h-4" />
+            <span className="hidden sm:inline">{editingMessage ? "Replace file" : "Attach"}</span>
+          </label>
+        </div>
+
+        {file && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-700 rounded-lg text-xs text-zinc-300">
+            <FileText className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="truncate max-w-[100px]">{file.name}</span>
+            <button onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
+              <X className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300" />
+            </button>
+          </div>
+        )}
+
+        <button
+          onClick={sendMessage}
+          disabled={!text.trim() && !file}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            editingMessage ? "bg-amber-500 hover:bg-amber-400 text-white" : "bg-indigo-600 hover:bg-indigo-500 text-white"
+          }`}
+        >
+          {editingMessage ? <><CheckCircle className="w-4 h-4" /> Save</> : <><Send className="w-4 h-4" /> Send</>}
+        </button>
+      </div>
+    </div>
+    <div className="mt-1.5 text-right text-[11px] text-zinc-700">
+      <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-600 border border-zinc-700">Enter</kbd> to {editingMessage ? "save" : "send"} &nbsp;·&nbsp;
+      <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-600 border border-zinc-700">Shift+Enter</kbd> newline
+    </div>
+  </div>
+);
+
+/* ---------- MessagesList ---------- */
+// FIX: defined OUTSIDE HubChat — was redefined inside, causing full remount on every render
+const MessagesList = ({
+  messages, messagesContainerRef, messagesEndRef,
+  typingUsers, messageMap, setReplyTo, setEditingMessage,
+  onEdit, onDelete,
+}) => (
+  <div ref={messagesContainerRef} className="flex-1 overflow-y-auto py-4 space-y-0.5 scroll-smooth">
+    {messages.length === 0 ? (
+      <div className="h-full flex flex-col items-center justify-center text-zinc-600 py-16">
+        <div className="w-16 h-16 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center mb-4">
+          <Hash className="w-8 h-8 text-zinc-600" />
+        </div>
+        <p className="text-base font-semibold text-zinc-500">No messages yet</p>
+        <p className="text-sm text-zinc-700 mt-1">Be the first to say something!</p>
+      </div>
+    ) : (
+      <>
+        {messages.map((msg) => (
+          <MessageItem
+            key={msg.id}
+            msg={msg}
+            parent={msg.parent_id ? messageMap[msg.parent_id] : null}
+            onReply={(m) => { setReplyTo(m); setEditingMessage(null); }}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            messageMap={messageMap}
+          />
+        ))}
+        <TypingIndicator typingUsers={typingUsers} />
+        <div ref={messagesEndRef} />
+      </>
+    )}
+  </div>
+);
+
+/* ---------- OnlineSidebar ---------- */
+// FIX: defined OUTSIDE HubChat
+const OnlineSidebar = ({ onlineUsers, currentUsername, compact = false }) => (
+  <div className={compact ? "flex flex-col h-full" : ""}>
+    <div className={`${compact ? "px-4 py-3 border-b border-zinc-800" : "px-5 pt-5 pb-3"}`}>
+      <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+        <Circle className="w-2 h-2 fill-emerald-500 text-emerald-500" />
+        Online — {onlineUsers.length}
+      </h3>
+    </div>
+    <div className={`space-y-0.5 ${compact ? "flex-1 overflow-y-auto px-2 py-2" : "px-3 pb-3 mt-1"}`}>
+      {onlineUsers.length === 0 ? (
+        <div className="py-8 text-center text-zinc-600 text-xs">No one online</div>
+      ) : onlineUsers.map((user, idx) => (
+        <div key={user.username || idx} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-zinc-800 transition-colors group">
+          <div className="relative flex-shrink-0">
+            <Avatar user={user} size="sm" />
+            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-zinc-900" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-zinc-300 truncate">
+              {user.username}
+              {user.username === currentUsername && <span className="text-zinc-600 text-xs ml-1">(you)</span>}
+            </div>
+            <div className="text-[11px] text-emerald-600">Active now</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+/* ---------- ChatPanel ---------- */
+// FIX: defined OUTSIDE HubChat — all sub-components passed as props
+const ChatPanel = ({
+  sidebarCompact, messages, messagesContainerRef, messagesEndRef,
+  typingUsers, messageMap, setReplyTo, setEditingMessage, onEdit, onDelete,
+  showScrollBtn, scrollToBottom, editingMessage, cancelEdit, replyTo,
+  text, setText, file, setFile, sendMessage, handleTyping, handleKeyDown,
+  textareaRef, emojiButtonRef, fileInputRef, showEmojiPicker,
+  setShowEmojiPicker, insertEmoji, numericHubId, onlineUsers, currentUsername,
+}) => (
+  <div className="flex flex-1 min-h-0 overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 min-w-0 relative">
+      <MessagesList
+        messages={messages}
+        messagesContainerRef={messagesContainerRef}
+        messagesEndRef={messagesEndRef}
+        typingUsers={typingUsers}
+        messageMap={messageMap}
+        setReplyTo={setReplyTo}
+        setEditingMessage={setEditingMessage}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+      {showScrollBtn && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-20 right-4 flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-300 text-xs font-medium px-3 py-1.5 rounded-full shadow-xl transition-all"
+        >
+          <ChevronDown className="w-3.5 h-3.5" /> New messages
+        </button>
+      )}
+      <EditBanner editingMessage={editingMessage} cancelEdit={cancelEdit} />
+      <ReplyBar replyTo={replyTo} setReplyTo={setReplyTo} />
+      <InputArea
+        text={text}
+        setText={setText}
+        file={file}
+        setFile={setFile}
+        editingMessage={editingMessage}
+        sendMessage={sendMessage}
+        handleTyping={handleTyping}
+        handleKeyDown={handleKeyDown}
+        textareaRef={textareaRef}
+        emojiButtonRef={emojiButtonRef}
+        fileInputRef={fileInputRef}
+        showEmojiPicker={showEmojiPicker}
+        setShowEmojiPicker={setShowEmojiPicker}
+        insertEmoji={insertEmoji}
+        numericHubId={numericHubId}
+      />
+    </div>
+    <div className={`hidden lg:flex flex-col border-l border-zinc-800 bg-zinc-900 ${sidebarCompact ? "w-56" : "w-60"}`}>
+      <OnlineSidebar onlineUsers={onlineUsers} currentUsername={currentUsername} compact={sidebarCompact} />
+    </div>
+  </div>
+);
+
+/* ================================================================
+   HubChat — main component
+   All sub-components are defined ABOVE this function.
+   Do NOT redefine them inside this function body.
+   ================================================================ */
 export default function HubChat() {
   const { hubId } = useParams();
   const numericHubId = Number(hubId);
@@ -243,9 +490,12 @@ export default function HubChat() {
     return map;
   }, [messages]);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // FIX: scroll to bottom helper — instant for initial load, smooth for new messages
+  const scrollToBottom = useCallback((behavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
+
+  const navigate = useNavigate();
 
   // Scroll button visibility
   useEffect(() => {
@@ -258,12 +508,22 @@ export default function HubChat() {
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
+  // FIX: scroll to bottom instantly on initial load so last message is visible
   useEffect(() => {
     api.get(`/messages/?hub=${numericHubId}`).then((res) => {
       setMessages(res.data);
-      setTimeout(scrollToBottom, 100);
+      // Use two rAF passes to ensure the DOM has fully painted before scrolling
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollToBottom("instant");
+        });
+      });
     });
   }, [numericHubId, scrollToBottom]);
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     if (!hubId || !token) return;
@@ -283,7 +543,7 @@ export default function HubChat() {
       switch (data.type) {
         case "chat_message":
           setMessages((prev) => prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message]);
-          setTimeout(scrollToBottom, 80);
+          setTimeout(() => scrollToBottom("smooth"), 80);
           break;
         case "message_edit":
           setMessages((prev) => prev.map((m) => (m.id === data.message.id ? data.message : m)));
@@ -346,16 +606,29 @@ export default function HubChat() {
     textareaRef.current?.focus();
   }, []);
 
-  const cancelEdit = useCallback(() => { setEditingMessage(null); setText(""); }, []);
+  const cancelEdit = useCallback(() => {
+    setEditingMessage(null);
+    setText("");
+    textareaRef.current?.focus();
+  }, []);
 
   const saveEdit = useCallback(async () => {
-    if (!editingMessage || !text.trim()) return;
+    if (!editingMessage || (!text.trim() && !file)) return;
     try {
-      await api.patch(`/messages/${editingMessage.id}/edit/`, { content: text });
+      if (file) {
+        const form = new FormData();
+        if (text.trim()) form.append("content", text);
+        form.append("media", file);
+        await api.patch(`/messages/${editingMessage.id}/edit/`, form);
+      } else {
+        await api.patch(`/messages/${editingMessage.id}/edit/`, { content: text });
+      }
       setEditingMessage(null);
       setText("");
+      setFile(null);
+      textareaRef.current?.focus();
     } catch (err) { console.error("Edit failed:", err); }
-  }, [editingMessage, text]);
+  }, [editingMessage, text, file]);
 
   const onDelete = useCallback(async (msgId) => {
     if (!window.confirm("Delete this message?")) return;
@@ -380,9 +653,12 @@ export default function HubChat() {
     }
     try {
       await api.post("/messages/", form);
-      setText(""); setFile(null); setReplyTo(null);
+      setText("");
+      textareaRef.current?.focus();
+      setFile(null);
+      setReplyTo(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      scrollToBottom();
+      scrollToBottom("smooth");
     } catch (err) { console.error("Send failed:", err); }
   }, [editingMessage, saveEdit, text, file, numericHubId, replyTo, scrollToBottom]);
 
@@ -400,6 +676,18 @@ export default function HubChat() {
     requestAnimationFrame(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = s + emoji.length; });
   }, [text]);
 
+  // Shared props object to avoid repeating the long prop list twice (normal + fullscreen)
+  const chatPanelProps = {
+    messages, messagesContainerRef, messagesEndRef,
+    typingUsers, messageMap, setReplyTo, setEditingMessage,
+    onEdit, onDelete, showScrollBtn, scrollToBottom,
+    editingMessage, cancelEdit, replyTo,
+    text, setText, file, setFile, sendMessage,
+    handleTyping, handleKeyDown, textareaRef, emojiButtonRef,
+    fileInputRef, showEmojiPicker, setShowEmojiPicker,
+    insertEmoji, numericHubId, onlineUsers, currentUsername,
+  };
+
   if (!numericHubId || Number.isNaN(numericHubId)) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -413,201 +701,10 @@ export default function HubChat() {
     );
   }
 
-  /* ── Sub-components ── */
-
-  const ReplyBar = () => replyTo ? (
-    <div className="px-4 py-2.5 border-t border-zinc-800 bg-zinc-900/60 flex items-center justify-between flex-shrink-0">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className="w-0.5 h-8 bg-indigo-500 rounded-full flex-shrink-0" />
-        <div className="min-w-0">
-          <div className="text-xs font-semibold text-indigo-400">
-            Replying to {typeof replyTo.sender === "object" ? replyTo.sender?.username : replyTo.sender}
-          </div>
-          <div className="text-xs text-zinc-500 truncate max-w-xs">{replyTo.content}</div>
-        </div>
-      </div>
-      <button onClick={() => setReplyTo(null)} className="p-1.5 rounded-lg hover:bg-zinc-800 transition-colors ml-2">
-        <X className="w-4 h-4 text-zinc-500" />
-      </button>
-    </div>
-  ) : null;
-
-  const EditBanner = () => editingMessage ? (
-    <div className="px-4 py-2.5 border-t border-amber-900/40 bg-amber-900/10 flex items-center justify-between flex-shrink-0">
-      <div className="flex items-center gap-2.5">
-        <Edit2 className="w-4 h-4 text-amber-400" />
-        <div>
-          <div className="text-xs font-semibold text-amber-400">Editing message</div>
-          <div className="text-xs text-zinc-500">Press <kbd className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-400">Esc</kbd> to cancel</div>
-        </div>
-      </div>
-      <button onClick={cancelEdit} className="p-1.5 rounded-lg hover:bg-amber-900/20 transition-colors">
-        <X className="w-4 h-4 text-amber-500" />
-      </button>
-    </div>
-  ) : null;
-
-  const InputArea = () => (
-    <div className="flex-shrink-0 px-4 pb-4 pt-3">
-      <div className={`rounded-xl border transition-colors ${editingMessage ? "border-amber-700/60 bg-zinc-800" : "border-zinc-700 bg-zinc-800 focus-within:border-indigo-600/70"}`}>
-        <textarea
-          value={text}
-          ref={textareaRef}
-          onChange={(e) => { setText(e.target.value); handleTyping(); }}
-          onKeyDown={handleKeyDown}
-          placeholder={editingMessage ? "Edit your message…" : `Message #hub-${numericHubId}`}
-          className="w-full bg-transparent px-4 pt-3 pb-2 text-sm text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none min-h-[44px] max-h-36"
-          rows={2}
-        />
-        <div className="flex items-center justify-between px-3 pb-2.5">
-          <div className="flex items-center gap-1">
-            {/* Emoji */}
-            <div className="relative">
-              <ToolbarBtn ref={emojiButtonRef} icon={<Smile className="w-4 h-4" />} label="Emoji" onClick={() => setShowEmojiPicker((v) => !v)} active={showEmojiPicker} />
-              {showEmojiPicker && (
-                <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiButtonRef} />
-              )}
-            </div>
-            {/* File */}
-            {!editingMessage && (
-              <>
-                <input type="file" ref={fileInputRef} onChange={(e) => setFile(e.target.files[0])} className="hidden" id="file-upload-input" />
-                <label htmlFor="file-upload-input" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/60 cursor-pointer transition-colors text-xs font-medium">
-                  <Paperclip className="w-4 h-4" />
-                  <span className="hidden sm:inline">Attach</span>
-                </label>
-              </>
-            )}
-          </div>
-
-          {/* File preview pill */}
-          {file && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-700 rounded-lg text-xs text-zinc-300">
-              <FileText className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="truncate max-w-[100px]">{file.name}</span>
-              <button onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
-                <X className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300" />
-              </button>
-            </div>
-          )}
-
-          {/* Send / Save */}
-          <button
-            onClick={sendMessage}
-            disabled={!text.trim() && !file}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-              editingMessage
-                ? "bg-amber-500 hover:bg-amber-400 text-white"
-                : "bg-indigo-600 hover:bg-indigo-500 text-white"
-            }`}
-          >
-            {editingMessage ? <><CheckCircle className="w-4 h-4" /> Save</> : <><Send className="w-4 h-4" /> Send</>}
-          </button>
-        </div>
-      </div>
-      <div className="mt-1.5 text-right text-[11px] text-zinc-700">
-        <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-600 border border-zinc-700">Enter</kbd> to {editingMessage ? "save" : "send"} &nbsp;·&nbsp;
-        <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-600 border border-zinc-700">Shift+Enter</kbd> newline
-      </div>
-    </div>
-  );
-
-  const MessagesList = () => (
-    <div ref={messagesContainerRef} className="flex-1 overflow-y-auto py-4 space-y-0.5 scroll-smooth">
-      {messages.length === 0 ? (
-        <div className="h-full flex flex-col items-center justify-center text-zinc-600 py-16">
-          <div className="w-16 h-16 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center mb-4">
-            <Hash className="w-8 h-8 text-zinc-600" />
-          </div>
-          <p className="text-base font-semibold text-zinc-500">No messages yet</p>
-          <p className="text-sm text-zinc-700 mt-1">Be the first to say something!</p>
-        </div>
-      ) : (
-        <>
-          {messages.map((msg) => (
-            <MessageItem
-              key={msg.id}
-              msg={msg}
-              parent={msg.parent_id ? messageMap[msg.parent_id] : null}
-              onReply={(m) => { setReplyTo(m); setEditingMessage(null); }}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              messageMap={messageMap}
-            />
-          ))}
-          <TypingIndicator typingUsers={typingUsers} />
-          <div ref={messagesEndRef} />
-        </>
-      )}
-    </div>
-  );
-
-  const OnlineSidebar = ({ compact = false }) => (
-    <div className={compact ? "flex flex-col h-full" : ""}>
-      <div className={`${compact ? "px-4 py-3 border-b border-zinc-800" : "px-5 pt-5 pb-3"}`}>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-          <Circle className="w-2 h-2 fill-emerald-500 text-emerald-500" />
-          Online — {onlineUsers.length}
-        </h3>
-      </div>
-      <div className={`space-y-0.5 ${compact ? "flex-1 overflow-y-auto px-2 py-2" : "px-3 pb-3 mt-1"}`}>
-        {onlineUsers.length === 0 ? (
-          <div className="py-8 text-center text-zinc-600 text-xs">No one online</div>
-        ) : onlineUsers.map((user, idx) => (
-          <div key={user.username || idx} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-zinc-800 transition-colors group">
-            <div className="relative flex-shrink-0">
-              <Avatar user={user} size="sm" />
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-zinc-900" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-zinc-300 truncate">
-                {user.username}
-                {user.username === currentUsername && <span className="text-zinc-600 text-xs ml-1">(you)</span>}
-              </div>
-              <div className="text-[11px] text-emerald-600">Active now</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  /* ── CHAT PANEL (shared between normal/fullscreen) ── */
-  const ChatPanel = ({ sidebarCompact = false }) => (
-    <div className="flex flex-1 min-h-0 overflow-hidden">
-      {/* Messages */}
-      <div className="flex flex-col flex-1 min-h-0 min-w-0 relative">
-        <MessagesList />
-
-        {/* Scroll to bottom pill */}
-        {showScrollBtn && (
-          <button
-            onClick={scrollToBottom}
-            className="absolute bottom-20 right-4 flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-300 text-xs font-medium px-3 py-1.5 rounded-full shadow-xl transition-all"
-          >
-            <ChevronDown className="w-3.5 h-3.5" /> New messages
-          </button>
-        )}
-
-        <EditBanner />
-        <ReplyBar />
-        <InputArea />
-      </div>
-
-      {/* Sidebar */}
-      <div className={`hidden lg:flex flex-col border-l border-zinc-800 bg-zinc-900 ${sidebarCompact ? "w-56" : "w-60"}`}>
-        <OnlineSidebar compact={sidebarCompact} />
-      </div>
-    </div>
-  );
-
-  /* ── RENDER ── */
-
-  // FULLSCREEN
+  /* ── FULLSCREEN ── */
   if (fullScreen) {
     return (
       <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col font-sans">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
@@ -619,6 +716,14 @@ export default function HubChat() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(`/hubs/${hubId}`)}
+              className="flex items-center gap-1.5 p-2 pr-3 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 border border-zinc-800 transition-colors text-sm font-medium"
+              title="Back to Hub Details"
+            >
+              <ChevronDown className="w-4 h-4 rotate-90" />
+              Hub Details
+            </button>
             <button onClick={() => setFullScreen(false)} className="p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors" title="Exit fullscreen">
               <Minimize2 className="w-4 h-4" />
             </button>
@@ -627,16 +732,15 @@ export default function HubChat() {
             </button>
           </div>
         </div>
-        <ChatPanel sidebarCompact />
+        <ChatPanel sidebarCompact {...chatPanelProps} />
       </div>
     );
   }
 
-  // NORMAL
+  /* ── NORMAL ── */
   return (
     <div className="min-h-screen bg-zinc-950 font-sans">
       <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Page header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-900/40">
@@ -655,6 +759,14 @@ export default function HubChat() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(`/hubs/${hubId}`)}
+              className="flex items-center gap-1.5 p-2 pr-3 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 border border-zinc-800 transition-colors text-sm font-medium"
+              title="Back to Hub Details"
+            >
+              <ChevronDown className="w-4 h-4 rotate-90" />
+              Hub Details
+            </button>
             <button onClick={() => setFullScreen(true)} className="p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 border border-zinc-800 transition-colors" title="Fullscreen">
               <Maximize2 className="w-4 h-4" />
             </button>
@@ -664,9 +776,7 @@ export default function HubChat() {
           </div>
         </div>
 
-        {/* Chat box */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl" style={{ height: "calc(100vh - 140px)" }}>
-          {/* Chat header bar */}
           <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 flex-shrink-0">
             <div className="flex items-center gap-2 text-zinc-400">
               <Hash className="w-4 h-4" />
@@ -675,24 +785,9 @@ export default function HubChat() {
             <TypingIndicator typingUsers={typingUsers} />
           </div>
 
-          <ChatPanel />
+          <ChatPanel {...chatPanelProps} />
         </div>
       </div>
     </div>
   );
 }
-
-/* ── Toolbar button helper ── */
-const ToolbarBtn = ({ icon, label, onClick, active, ref: _ref, ...rest }) => (
-  <button
-    ref={_ref}
-    onClick={onClick}
-    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-      active ? "text-indigo-400 bg-indigo-500/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/60"
-    }`}
-    {...rest}
-  >
-    {icon}
-    <span className="hidden sm:inline">{label}</span>
-  </button>
-);

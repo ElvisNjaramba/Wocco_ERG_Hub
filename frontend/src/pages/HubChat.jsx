@@ -1,5 +1,4 @@
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api/axios";
 import { messageTemplates } from "../components/MessageTemplates";
@@ -9,215 +8,209 @@ import {
   Paperclip,
   X,
   Reply,
-  ChevronUp,
+  ChevronDown,
   Image as ImageIcon,
-  File,
+  FileText,
   Smile,
-  MoreVertical,
   Users,
-  Pin,
-  Search,
-  Clock,
   CheckCircle,
   User,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Edit2,
+  Trash2,
+  Hash,
+  Circle,
 } from "lucide-react";
 
 /* ---------- helpers ---------- */
 const isImage = (url) => /\.(jpg|jpeg|png|gif|webp|avif|svg)$/i.test(url || "");
 
-const buildMessageMap = (messages) => {
-  const map = {};
-  messages.forEach((m) => {
-    map[m.id] = m;
-  });
-  return map;
+/* ---------- Avatar ---------- */
+const Avatar = ({ user, size = "md" }) => {
+  const sz = size === "sm" ? "w-8 h-8 text-xs" : "w-9 h-9 text-sm";
+  const initials = user?.username?.slice(0, 2).toUpperCase() || "?";
+  // stable color based on username
+  const colors = [
+    "bg-rose-500", "bg-orange-500", "bg-amber-500",
+    "bg-emerald-500", "bg-teal-500", "bg-cyan-500",
+    "bg-blue-500", "bg-violet-500", "bg-pink-500",
+  ];
+  const idx = (user?.username || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0) % colors.length;
+  return (
+    <div className={`${sz} ${colors[idx]} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 overflow-hidden ring-2 ring-white/10`}>
+      {user?.avatar_url
+        ? <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+        : initials}
+    </div>
+  );
 };
 
-/* ---------- message item ---------- */
-const MessageItem = ({ msg, onReply, parent, template = "bubble", messageMap }) => {
-  const TemplateComponent =
-    messageTemplates[template]?.component ||
-    (({ item }) => (
-      <p className="text-gray-900 text-sm leading-relaxed whitespace-pre-wrap">
-        {item.text}
-      </p>
-    ));
-
-  const itemData = {
-    text: msg.content,
-    author: {
-      id: msg.sender.id,
-      name: msg.sender.username,
-      avatarUrl: msg.sender.avatar_url
-    },
-
-    timestamp: new Date(msg.timestamp),
-
-    media_url: msg.media_url,
-  };
-
+/* ---------- MessageItem ---------- */
+const MessageItem = ({ msg, onReply, onEdit, onDelete, parent, messageMap }) => {
   const ref = useRef(null);
 
-  // Save ref in map for jumping
   useEffect(() => {
-    if (messageMap[msg.id]) {
-      messageMap[msg.id]._ref = ref;
-    }
+    if (messageMap && messageMap[msg.id]) messageMap[msg.id]._ref = ref;
   }, [msg.id, messageMap]);
 
   const handleQuotedClick = () => {
-    if (parent && messageMap[parent.id]?._ref?.current) {
-      const el = messageMap[parent.id]._ref.current;
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-
-      // Temporary highlight
-      el.style.transition = "all 0.5s ease";
-      const original = el.style.background;
-      el.style.background = "#fef3c7";
-      el.style.boxShadow = "0 0 0 3px #f59e0b";
-      
-      setTimeout(() => {
-        el.style.background = original || "#ffffff";
-        el.style.boxShadow = "";
-      }, 1500);
-    }
+    const el = messageMap[parent?.id]?._ref?.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.style.transition = "background 0.3s";
+    el.style.background = "rgba(99,102,241,0.15)";
+    setTimeout(() => { el.style.background = ""; }, 1600);
   };
 
-  return (
-    <div 
-      ref={ref} 
-      className="group relative mb-4 transition-all duration-200 hover:bg-gray-50/50 rounded-2xl p-2"
-    >
-      <div className="flex gap-3 w-full">
+  const currentUsername = localStorage.getItem("username");
+  const isOwner = msg.sender?.username === currentUsername;
+  const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-        {/* Avatar */}
-        <div className="flex-shrink-0">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#432dd7] to-purple-500 flex items-center justify-center overflow-hidden border-2 border-white shadow-lg">
-            {itemData.author.avatarUrl ? (
-              <img 
-                src={itemData.author.avatarUrl}
-                alt={itemData.author.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <User className="w-5 h-5 text-white" />
-            )}
-          </div>
+  if (msg.is_deleted) {
+    return (
+      <div ref={ref} className="flex items-start gap-3 px-4 py-2 group">
+        <div className="w-9 h-9 rounded-full bg-zinc-700 flex items-center justify-center flex-shrink-0">
+          <User className="w-4 h-4 text-zinc-500" />
         </div>
-
-        {/* Message Content */}
-        {/* <div className="flex-1 min-w-0"> */}
-
-        <div className="flex flex-col min-w-0 flex-1">
-
-
-          {/* Quoted parent */}
-          {parent && (
-            <div
-              onClick={handleQuotedClick}
-              className="mb-2 px-3 py-2 rounded-xl bg-gradient-to-r from-[#432dd7]/10 to-purple-500/10 border border-[#432dd7]/20 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md"
-            >
-              <div className="flex items-center gap-2">
-                <Reply className="w-3 h-3 text-[#432dd7]" />
-                <span className="text-xs font-semibold text-[#432dd7]">
-                  {parent.sender.username}
-                </span>
-                <span className="text-xs text-gray-500 truncate">
-                  {parent.content?.slice(0, 80)}
-                  {parent.content?.length > 80 ? "..." : ""}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Message Header */}
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-bold text-gray-900 text-sm">
-              {itemData.author.name}
-            </span>
-            <span className="text-xs text-gray-500">
-              {new Date(itemData.timestamp).toLocaleTimeString([], { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })}
-            </span>
-            {msg.isEdited && (
-              <span className="text-xs text-gray-400 italic">edited</span>
-            )}
-          </div>
-
-          {/* Message Body */}
-          <div className="relative">
-            <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-200 hover:border-gray-300 transition-all group-hover:shadow-md max-w-[85%] w-full">
-
-              <div className="whitespace-pre-wrap break-words break-all text-sm text-gray-900 leading-relaxed">
-                <TemplateComponent item={itemData} />
-              </div>
-
-              
-              {/* Media Attachment */}
-              {msg.media_url && (
-                <div className="mt-3 rounded-xl overflow-hidden border border-gray-200">
-                  {isImage(msg.media_url) ? (
-                    <div className="relative">
-                      <img 
-                        src={msg.media_url} 
-                        alt="Attachment" 
-                        className="w-full max-w-md object-cover transition-transform hover:scale-[1.02] duration-300 cursor-zoom-in"
-                        onClick={() => window.open(msg.media_url, '_blank')}
-                      />
-                      <div className="absolute bottom-2 right-2 bg-black/50 backdrop-blur-sm rounded-lg px-2 py-1">
-                        <ImageIcon className="w-4 h-4 text-white" />
-                      </div>
-                    </div>
-                  ) : (
-                    <a
-                      href={msg.media_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#432dd7]/20 to-purple-500/20 flex items-center justify-center">
-                        <File className="w-5 h-5 text-[#432dd7]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 truncate text-sm">
-                          {msg.media_url.split('/').pop()}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          Click to download
-                        </div>
-                      </div>
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Message Actions */}
-            <div className="absolute -right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={() => onReply(msg)}
-                  className="w-8 h-8 rounded-full bg-white shadow-lg border border-gray-200 flex items-center justify-center hover:bg-[#432dd7] hover:text-white hover:border-[#432dd7] transition-all"
-                  title="Reply"
-                >
-                  <Reply className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+        <div>
+          <span className="text-xs font-semibold text-zinc-400 mr-2">{msg.sender?.username}</span>
+          <span className="text-xs text-zinc-600 italic">• {time}</span>
+          <div className="mt-1 text-sm text-zinc-600 italic bg-zinc-800/50 px-3 py-1.5 rounded-lg w-fit border border-zinc-700/50">
+            🗑 This message was deleted
           </div>
         </div>
       </div>
-    </div>
+    );
+  }
 
+  return (
+    <div
+      ref={ref}
+      className="group flex items-start gap-3 px-4 py-2 hover:bg-zinc-800/40 rounded-lg transition-colors duration-150 relative"
+    >
+      {/* Avatar */}
+      <div className="mt-0.5">
+        <Avatar user={msg.sender} />
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 min-w-0">
+        {/* Header */}
+        <div className="flex items-baseline gap-2 mb-0.5">
+          <span className="font-semibold text-sm text-zinc-100">{msg.sender?.username}</span>
+          <span className="text-[11px] text-zinc-500">{time}</span>
+          {msg.is_edited && <span className="text-[11px] text-zinc-600 italic">(edited)</span>}
+        </div>
+
+        {/* Quoted parent */}
+        {parent && (
+          <div
+            onClick={handleQuotedClick}
+            className="mb-2 flex items-start gap-2 pl-3 border-l-2 border-indigo-500/60 cursor-pointer hover:border-indigo-400 transition-colors"
+          >
+            <Reply className="w-3 h-3 text-indigo-400 mt-0.5 flex-shrink-0" />
+            <div className="min-w-0">
+              <span className="text-xs font-semibold text-indigo-400 mr-1">
+                {typeof parent.sender === "object" ? parent.sender?.username : parent.sender}
+              </span>
+              <span className="text-xs text-zinc-500 truncate">
+                {parent.content?.slice(0, 100)}{parent.content?.length > 100 ? "…" : ""}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Text */}
+        <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap break-words">
+          {msg.content}
+        </p>
+
+        {/* Media */}
+        {msg.media_url && (
+          <div className="mt-2 rounded-xl overflow-hidden max-w-xs border border-zinc-700">
+            {isImage(msg.media_url) ? (
+              <img
+                src={msg.media_url}
+                alt="Attachment"
+                className="w-full object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
+                onClick={() => window.open(msg.media_url, "_blank")}
+              />
+            ) : (
+              <a
+                href={msg.media_url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 p-3 bg-zinc-800 hover:bg-zinc-700 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-indigo-400" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-zinc-200 truncate max-w-[160px]">
+                    {msg.media_url.split("/").pop()}
+                  </div>
+                  <div className="text-xs text-zinc-500">Click to download</div>
+                </div>
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Hover actions */}
+      <div className="absolute right-3 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-0.5">
+        <ActionBtn icon={<Reply className="w-3.5 h-3.5" />} title="Reply" onClick={() => onReply(msg)} />
+        {isOwner && (
+          <>
+            <ActionBtn icon={<Edit2 className="w-3.5 h-3.5" />} title="Edit" onClick={() => onEdit(msg)} color="amber" />
+            <ActionBtn icon={<Trash2 className="w-3.5 h-3.5" />} title="Delete" onClick={() => onDelete(msg.id)} color="red" />
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ActionBtn = ({ icon, title, onClick, color }) => {
+  const hover = color === "red"
+    ? "hover:text-red-400 hover:bg-red-500/10"
+    : color === "amber"
+    ? "hover:text-amber-400 hover:bg-amber-500/10"
+    : "hover:text-indigo-400 hover:bg-indigo-500/10";
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`w-7 h-7 flex items-center justify-center rounded text-zinc-400 transition-colors ${hover}`}
+    >
+      {icon}
+    </button>
+  );
+};
+
+/* ---------- Typing indicator ---------- */
+const TypingIndicator = ({ typingUsers }) => {
+  if (!typingUsers?.length) return null;
+  const label = typingUsers.length === 1
+    ? `${typingUsers[0]} is typing`
+    : typingUsers.length === 2
+    ? `${typingUsers[0]} and ${typingUsers[1]} are typing`
+    : "Several people are typing";
+  return (
+    <div className="flex items-center gap-2 px-4 py-1.5 text-xs text-zinc-500">
+      <div className="flex gap-1">
+        {[0, 150, 300].map((d) => (
+          <span key={d} className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
+        ))}
+      </div>
+      <span>{label}…</span>
+    </div>
   );
 };
 
 /* ---------- main HubChat ---------- */
-export default function HubChat({ template = "bubble" }) {
+export default function HubChat() {
   const { hubId } = useParams();
   const numericHubId = Number(hubId);
 
@@ -225,738 +218,481 @@ export default function HubChat({ template = "bubble" }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingUser, setTypingUser] = useState(null);
+  const [typingUsers, setTypingUsers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [fullScreen, setFullScreen] = useState(false);
-
+  const [editingMessage, setEditingMessage] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+
   const textareaRef = useRef(null);
-const emojiButtonRef = useRef(null);
-
-
+  const emojiButtonRef = useRef(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const messagesContainerRef = useRef(null);
-const typingTimeoutRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const typingTimersRef = useRef({});
 
   const token = localStorage.getItem("access");
+  const currentUsername = localStorage.getItem("username");
 
-  // Scroll to bottom
-  const scrollToBottom = () => {
+  const messageMap = useMemo(() => {
+    const map = {};
+    messages.forEach((m) => { map[m.id] = { ...m }; });
+    return map;
+  }, [messages]);
+
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-const currentUsername = localStorage.getItem("username");
+  }, []);
 
-  // Load messages
+  // Scroll button visibility
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 120);
+    };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
   useEffect(() => {
     api.get(`/messages/?hub=${numericHubId}`).then((res) => {
       setMessages(res.data);
       setTimeout(scrollToBottom, 100);
     });
-  }, [numericHubId]);
+  }, [numericHubId, scrollToBottom]);
 
-  // WebSocket connection
   useEffect(() => {
     if (!hubId || !token) return;
-
-    const ws = new WebSocket(
-      `ws://127.0.0.1:8000/ws/hub/${numericHubId}/?token=${token}`
-    );
+    const ws = new WebSocket(`ws://127.0.0.1:8000/ws/hub/${numericHubId}/?token=${token}`);
     socketRef.current = ws;
+
+    ws.onopen = () => {
+      if (currentUsername) {
+        setOnlineUsers((prev) =>
+          prev.some((u) => u.username === currentUsername) ? prev : [...prev, { username: currentUsername }]
+        );
+      }
+    };
 
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
-      if (data.type === "chat_message") {
-        setMessages((prev) =>
-          prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message]
-        );
-        setTimeout(scrollToBottom, 100);
-      }
-      
-      // Handle typing indicators
-      if (data.type === "typing") {
-        // Ignore my own typing events
-        if (data.user === currentUsername) return;
-
-        if (data.is_typing) {
-          setTypingUser(data.user);
-          setIsTyping(true);
-        } else {
-          setTypingUser(null);
-          setIsTyping(false);
+      switch (data.type) {
+        case "chat_message":
+          setMessages((prev) => prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message]);
+          setTimeout(scrollToBottom, 80);
+          break;
+        case "message_edit":
+          setMessages((prev) => prev.map((m) => (m.id === data.message.id ? data.message : m)));
+          break;
+        case "message_delete":
+          setMessages((prev) => prev.map((m) => m.id === data.message_id ? { ...m, is_deleted: true, content: null } : m));
+          break;
+        case "typing": {
+          const { user: typingUser, is_typing } = data;
+          if (typingUser === currentUsername) break;
+          setTypingUsers((prev) => is_typing ? (prev.includes(typingUser) ? prev : [...prev, typingUser]) : prev.filter((u) => u !== typingUser));
+          if (is_typing) {
+            clearTimeout(typingTimersRef.current[typingUser]);
+            typingTimersRef.current[typingUser] = setTimeout(() => {
+              setTypingUsers((prev) => prev.filter((u) => u !== typingUser));
+              delete typingTimersRef.current[typingUser];
+            }, 3000);
+          } else {
+            clearTimeout(typingTimersRef.current[typingUser]);
+            delete typingTimersRef.current[typingUser];
+          }
+          break;
         }
-      }
-
-
-
-if (data.type === "presence") {
-  setOnlineUsers((prev) => {
-if (data.action === "online") {
-  if (!data.user.username) return prev; // ignore users without username
-  if (prev.some(u => u.username === data.user.username)) return prev;
-  return [...prev, data.user];
-}
-
-if (data.action === "offline") {
-  if (!data.user.username) return prev;
-  return prev.filter(u => u.username !== data.user.username);
-}
-
-
-    return prev;
-  });
-}
-
-
-      
-      // Handle online users
-      if (data.type === "online_users") {
-        setOnlineUsers(data.users);
+        case "presence":
+          setOnlineUsers((prev) => {
+            if (!data.user?.username) return prev;
+            if (data.action === "online") return prev.some((u) => u.username === data.user.username) ? prev : [...prev, data.user];
+            if (data.action === "offline") return prev.filter((u) => u.username !== data.user.username);
+            return prev;
+          });
+          break;
+        case "online_users":
+          setOnlineUsers(Array.from(new Map((data.users || []).map((u) => [u.username, u])).values()));
+          break;
+        default: break;
       }
     };
-
-ws.onopen = () => {
-  console.log("WebSocket connected");
-
-  if (currentUsername) {  // Only add if username exists
-    setOnlineUsers((prev) => {
-      if (prev.some(u => u.username === currentUsername)) return prev;
-      return [...prev, { username: currentUsername }];
-    });
-  }
-};
-
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
+      Object.values(typingTimersRef.current).forEach(clearTimeout);
+      typingTimersRef.current = {};
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
     };
-  }, [hubId, token, numericHubId]);
+  }, [hubId, token, numericHubId, currentUsername, scrollToBottom]);
 
+  const handleTyping = useCallback(() => {
+    const ws = socketRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "typing", is_typing: true }));
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "typing", is_typing: false }));
+    }, 1500);
+  }, []);
 
-const handleTyping = () => {
-  const ws = socketRef.current;
+  const onEdit = useCallback((msg) => {
+    setEditingMessage(msg);
+    setText(msg.content || "");
+    setReplyTo(null);
+    textareaRef.current?.focus();
+  }, []);
 
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const cancelEdit = useCallback(() => { setEditingMessage(null); setText(""); }, []);
 
-  ws.send(JSON.stringify({
-    type: "typing",
-    is_typing: true,
-  }));
+  const saveEdit = useCallback(async () => {
+    if (!editingMessage || !text.trim()) return;
+    try {
+      await api.patch(`/messages/${editingMessage.id}/edit/`, { content: text });
+      setEditingMessage(null);
+      setText("");
+    } catch (err) { console.error("Edit failed:", err); }
+  }, [editingMessage, text]);
 
-  clearTimeout(typingTimeoutRef.current);
+  const onDelete = useCallback(async (msgId) => {
+    if (!window.confirm("Delete this message?")) return;
+    try {
+      await api.delete(`/messages/${msgId}/delete_message/`);
+      setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, is_deleted: true, content: null } : m));
+    } catch (err) { console.error("Delete failed:", err); }
+  }, []);
 
-  typingTimeoutRef.current = setTimeout(() => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: "typing",
-        is_typing: false,
-      }));
-    }
-  }, 1500);
-};
-
-
-  // Send message
-  const sendMessage = async () => {
+  const sendMessage = useCallback(async () => {
+    if (editingMessage) { await saveEdit(); return; }
     if (!text.trim() && !file) return;
-
     const form = new FormData();
     form.append("hub", numericHubId.toString());
-    if (text) form.append("content", text);
+    if (text.trim()) form.append("content", text);
     if (file) form.append("media", file);
     if (replyTo?.id) form.append("parent", replyTo.id.toString());
-
+    const ws = socketRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "typing", is_typing: false }));
+      clearTimeout(typingTimeoutRef.current);
+    }
     try {
       await api.post("/messages/", form);
-      setText("");
-      setFile(null);
-      setReplyTo(null);
+      setText(""); setFile(null); setReplyTo(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       scrollToBottom();
-    } catch (error) {
-      console.error("Failed to send message:", error);
-    }
-  };
+    } catch (err) { console.error("Send failed:", err); }
+  }, [editingMessage, saveEdit, text, file, numericHubId, replyTo, scrollToBottom]);
 
-  // Handle Enter key for sending
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === "Escape" && editingMessage) cancelEdit();
+  }, [sendMessage, editingMessage, cancelEdit]);
 
-
-const insertEmoji = (emoji) => {
-  const textarea = textareaRef.current;
-  if (!textarea) return;
-
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-
-  const newText = text.slice(0, start) + emoji + text.slice(end);
-  setText(newText);
-
-  requestAnimationFrame(() => {
-    textarea.focus();
-    textarea.selectionStart = textarea.selectionEnd =
-      start + emoji.length;
-  });
-
-  // ❌ DO NOT close picker here
-};
-
-
-
-  // Build parent map for quoted messages
-  const messageMap = buildMessageMap(messages);
+  const insertEmoji = useCallback((emoji) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const s = ta.selectionStart, en = ta.selectionEnd;
+    const next = text.slice(0, s) + emoji + text.slice(en);
+    setText(next);
+    requestAnimationFrame(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = s + emoji.length; });
+  }, [text]);
 
   if (!numericHubId || Number.isNaN(numericHubId)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white">
-        <div className="text-center p-8 rounded-3xl bg-white shadow-2xl border border-gray-200 max-w-md">
-          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-            <X className="w-8 h-8 text-red-500" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Invalid Hub</h2>
-          <p className="text-gray-600 mb-6">The hub ID is invalid or not found.</p>
-          <button
-            onClick={() => window.history.back()}
-            className="rounded-xl bg-gradient-to-r from-[#432dd7] to-purple-600 text-white px-6 py-3 font-semibold hover:shadow-lg transition-all"
-          >
-            Go Back
-          </button>
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-center p-8 bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm">
+          <X className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <h2 className="text-xl font-bold text-zinc-100 mb-1">Invalid Hub</h2>
+          <p className="text-zinc-500 text-sm mb-5">The hub ID is invalid or not found.</p>
+          <button onClick={() => window.history.back()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">Go Back</button>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className={`min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-50/50 ${fullScreen ? 'fixed inset-0 z-50 bg-white' : ''}`}>
-      {/* Normal Mode Container */}
-      {!fullScreen && (
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          {/* Chat Header */}
-          <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 mb-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#432dd7] to-purple-600 flex items-center justify-center">
-                    <Users className="w-7 h-7 text-white" />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
-                    <span className="text-xs font-bold text-white">{onlineUsers.length}</span>
-                  </div>
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Hub Chat</h1>
-                  <div className="flex items-center gap-3 mt-1">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Clock className="w-4 h-4" />
-                      <span>Real-time messaging</span>
-                    </div>
-                    <div className="w-1 h-1 rounded-full bg-gray-300"></div>
-                    <div className="flex items-center gap-1 text-sm text-emerald-600 font-medium">
-                      <CheckCircle className="w-4 h-4" />
-                      <span>{messages.length} messages</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => setFullScreen(true)}
-                  className="p-3 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all"
-                  title="Enter fullscreen"
-                >
-                  <Maximize2 className="w-5 h-5 text-gray-600" />
-                </button>
-                {/* <button className="p-3 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all">
-                  <Pin className="w-5 h-5 text-gray-600" />
-                </button>
-                <button className="p-3 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all">
-                  <Search className="w-5 h-5 text-gray-600" />
-                </button> */}
-                <button className="rounded-xl bg-gradient-to-r from-[#432dd7] to-purple-600 text-white px-6 py-3 font-semibold hover:shadow-lg transition-all">
-                  Invite Members
-                </button>
-              </div>
-            </div>
+  /* ── Sub-components ── */
+
+  const ReplyBar = () => replyTo ? (
+    <div className="px-4 py-2.5 border-t border-zinc-800 bg-zinc-900/60 flex items-center justify-between flex-shrink-0">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="w-0.5 h-8 bg-indigo-500 rounded-full flex-shrink-0" />
+        <div className="min-w-0">
+          <div className="text-xs font-semibold text-indigo-400">
+            Replying to {typeof replyTo.sender === "object" ? replyTo.sender?.username : replyTo.sender}
           </div>
-
-          {/* Main Chat Layout for Normal Mode */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* Chat Messages */}
-            <div className="lg:col-span-3">
-              <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden h-[calc(100vh-250px)] flex flex-col">
-                {/* Messages Header */}
-                <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-gray-900">Messages</h2>
-                  <div className="flex items-center gap-4">
-                    {isTyping && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600 animate-pulse">
-                        <div className="flex gap-1">
-                          <div className="w-2 h-2 bg-[#432dd7] rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-[#432dd7] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                          <div className="w-2 h-2 bg-[#432dd7] rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                        </div>
-                        <span className="italic">
-                          {typingUser || "Someone"} is typing…
-                        </span>
-
-                      </div>
-                    )}
-                    <div className="text-sm text-gray-600">
-                      {messages.length} total messages
-                    </div>
-                  </div>
-                </div>
-
-                {/* Messages List */}
-                <div 
-                  ref={messagesContainerRef}
-                  className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-white to-gray-50/50 space-y-3"
-                >
-                  {messages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center mb-4">
-                        <Send className="w-10 h-10 text-gray-300" />
-                      </div>
-                      <p className="text-lg font-medium text-gray-400">No messages yet</p>
-                      <p className="text-sm text-gray-400 mt-2">Start the conversation!</p>
-                    </div>
-                  ) : (
-                    <>
-                      {messages.map((msg) => (
-                        <MessageItem
-                          key={msg.id}
-                          msg={msg}
-                          parent={msg.parent_id ? messageMap[msg.parent_id] : null}
-                          onReply={setReplyTo}
-                          template={template}
-                          messageMap={messageMap}
-                        />
-                      ))}
-                      <div ref={messagesEndRef} />
-                    </>
-                  )}
-                </div>
-
-                {/* Reply Preview */}
-                {replyTo && (
-                  <div className="border-t border-gray-100 bg-gradient-to-r from-[#432dd7]/5 to-purple-500/5 p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#432dd7] to-purple-500 flex items-center justify-center">
-                          <Reply className="w-4 h-4 text-white" />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            Replying to <span className="text-[#432dd7]">{replyTo.sender}</span>
-                          </div>
-                          <div className="text-sm text-gray-600 truncate max-w-md">
-                            {replyTo.content}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setReplyTo(null)}
-                        className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <X className="w-5 h-5 text-gray-500" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Message Input */}
-                <div className="border-t border-gray-100 p-4">
-                  <div className="relative flex items-center">
-                    <textarea
-                      value={text}
-                      ref={textareaRef}
-                      onChange={(e) => {
-                        setText(e.target.value);
-                        handleTyping();
-                      }}
-                      onKeyPress={handleKeyPress}
-                      placeholder="Type your message here..."
-                      className="flex-1 min-h-[70px] p-4 pr-24 rounded-2xl border-2 border-gray-200 focus:border-[#432dd7] focus:ring-2 focus:ring-[#432dd7]/20 focus:outline-none resize-none transition-all"
-                      rows="2"
-                    />
-
-                    <div className="absolute right-4 bottom-4 flex items-center gap-2">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={(e) => setFile(e.target.files[0])}
-                        className="hidden"
-                        id="file-upload"
-                      />
-                      <label
-                        htmlFor="file-upload"
-                        className="p-2 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors"
-                        title="Attach file"
-                      >
-                        <Paperclip className="w-5 h-5 text-gray-600" />
-                      </label>
-
-                      {file && (
-                        <div className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-[#432dd7]/10 to-purple-500/10 rounded-lg">
-                          <File className="w-4 h-4 text-[#432dd7]" />
-                          <span className="text-sm text-gray-700 truncate max-w-[100px]">
-                            {file.name}
-                          </span>
-                          <button
-                            onClick={() => {
-                              setFile(null);
-                              if (fileInputRef.current) fileInputRef.current.value = '';
-                            }}
-                            className="ml-1"
-                          >
-                            <X className="w-4 h-4 text-gray-500 hover:text-gray-700" />
-                          </button>
-                        </div>
-                      )}
-
-                      <button
-                        onClick={sendMessage}
-                        disabled={!text.trim() && !file}
-                        className="p-3 rounded-xl bg-gradient-to-r from-[#432dd7] to-purple-600 text-white hover:shadow-lg hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all"
-                        title="Send message"
-                      >
-                        <Send className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between mt-3 text-sm text-gray-500">
-                    <div className="flex items-center gap-4">
-<div className="relative">
-<button
-  ref={emojiButtonRef}
-  type="button"
-  onClick={() => setShowEmojiPicker(prev => !prev)}
-  className={`flex items-center gap-2 transition-colors ${
-    showEmojiPicker ? "text-[#432dd7]" : "hover:text-gray-700"
-  }`}
->
-  <Smile className="w-4 h-4" />
-  <span className="hidden sm:inline">Emoji</span>
-</button>
-
-
-
-{showEmojiPicker && (
-  <EmojiPicker
-    onSelect={insertEmoji}
-    onClose={() => setShowEmojiPicker(false)}
-    triggerRef={emojiButtonRef}
-  />
-)}
-
-</div>
-
-
-                      <button className="flex items-center gap-2 hover:text-gray-700 transition-colors">
-                        <ImageIcon className="w-4 h-4" />
-                        <span className="hidden sm:inline">Image</span>
-                      </button>
-                      <button className="flex items-center gap-2 hover:text-gray-700 transition-colors">
-                        <File className="w-4 h-4" />
-                        <span className="hidden sm:inline">File</span>
-                      </button>
-                    </div>
-                    <div className="text-xs sm:text-sm">
-                      Press <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">Enter</kbd> to send
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Online Users Sidebar */}
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 sticky top-8">
-                <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  Online Members ({onlineUsers.length})
-                </h3>
-                
-                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                  {onlineUsers.map((user, idx) => (
-                    <div key={idx} className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors">
-                      <div className="relative">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#432dd7] to-purple-500 flex items-center justify-center overflow-hidden">
-                          {user.avatar ? (
-                            <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
-                          ) : (
-                            <User className="w-5 h-5 text-white" />
-                          )}
-                        </div>
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 truncate text-sm">{user.username}</div>
-                        <div className="text-xs text-gray-500">Active now</div>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {onlineUsers.length === 0 && (
-                    <div className="text-center py-6 text-gray-500">
-                      <Users className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                      <p className="text-sm">No members online</p>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="mt-6 pt-6 border-t border-gray-100">
-                  <h4 className="font-semibold text-gray-900 mb-3 text-sm">Chat Features</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 p-2 rounded-xl bg-gradient-to-r from-[#432dd7]/5 to-purple-500/5">
-                      <Send className="w-4 h-4 text-[#432dd7]" />
-                      <span className="text-xs text-gray-700">Real-time messaging</span>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 rounded-xl bg-gradient-to-r from-[#432dd7]/5 to-purple-500/5">
-                      <Paperclip className="w-4 h-4 text-[#432dd7]" />
-                      <span className="text-xs text-gray-700">File sharing</span>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 rounded-xl bg-gradient-to-r from-[#432dd7]/5 to-purple-500/5">
-                      <Reply className="w-4 h-4 text-[#432dd7]" />
-                      <span className="text-xs text-gray-700">Threaded replies</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <div className="text-xs text-zinc-500 truncate max-w-xs">{replyTo.content}</div>
         </div>
-      )}
+      </div>
+      <button onClick={() => setReplyTo(null)} className="p-1.5 rounded-lg hover:bg-zinc-800 transition-colors ml-2">
+        <X className="w-4 h-4 text-zinc-500" />
+      </button>
+    </div>
+  ) : null;
 
-      {/* FULLSCREEN MODE - Takes entire screen */}
-      {fullScreen && (
-        <div className="fixed inset-0 z-50 bg-white flex flex-col">
-          {/* Fullscreen Header */}
-          <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#432dd7] to-purple-600 flex items-center justify-center">
-                  <Users className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">Hub Chat - Fullscreen</h1>
-                  <p className="text-sm text-gray-600">{onlineUsers.length} online • {messages.length} messages</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => setFullScreen(false)}
-                  className="p-3 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all"
-                  title="Exit fullscreen"
-                >
-                  <Minimize2 className="w-5 h-5 text-gray-600" />
-                </button>
-                <button className="rounded-xl bg-gradient-to-r from-[#432dd7] to-purple-600 text-white px-4 py-2 text-sm font-semibold hover:shadow-lg transition-all">
-                  Invite Members
-                </button>
-              </div>
-            </div>
-          </div>
+  const EditBanner = () => editingMessage ? (
+    <div className="px-4 py-2.5 border-t border-amber-900/40 bg-amber-900/10 flex items-center justify-between flex-shrink-0">
+      <div className="flex items-center gap-2.5">
+        <Edit2 className="w-4 h-4 text-amber-400" />
+        <div>
+          <div className="text-xs font-semibold text-amber-400">Editing message</div>
+          <div className="text-xs text-zinc-500">Press <kbd className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-400">Esc</kbd> to cancel</div>
+        </div>
+      </div>
+      <button onClick={cancelEdit} className="p-1.5 rounded-lg hover:bg-amber-900/20 transition-colors">
+        <X className="w-4 h-4 text-amber-500" />
+      </button>
+    </div>
+  ) : null;
 
-          {/* Fullscreen Chat Area - Takes remaining space */}
-          <div className="flex-1 flex flex-col min-h-0">
-            {/* Messages Header */}
-            <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center justify-between flex-shrink-0">
-              <h2 className="text-lg font-bold text-gray-900">Messages</h2>
-              <div className="flex items-center gap-4">
-                {isTyping && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600 animate-pulse">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-[#432dd7] rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-[#432dd7] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      <div className="w-2 h-2 bg-[#432dd7] rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                    </div>
-                    <span>Someone is typing...</span>
-                  </div>
-                )}
-                <div className="text-sm text-gray-600">
-                  {messages.length} total messages
-                </div>
-              </div>
-            </div>
-
-            {/* Messages List - Takes maximum available space */}
-            <div 
-              ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-white to-gray-50/50 space-y-3"
-            >
-              {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center mb-4">
-                    <Send className="w-10 h-10 text-gray-300" />
-                  </div>
-                  <p className="text-lg font-medium text-gray-400">No messages yet</p>
-                  <p className="text-sm text-gray-400 mt-2">Start the conversation!</p>
-                </div>
-              ) : (
-                <>
-                  {messages.map((msg) => (
-                    <MessageItem
-                      key={msg.id}
-                      msg={msg}
-                      parent={msg.parent_id ? messageMap[msg.parent_id] : null}
-                      onReply={setReplyTo}
-                      template={template}
-                      messageMap={messageMap}
-                    />
-                  ))}
-                  <div ref={messagesEndRef} />
-                </>
+  const InputArea = () => (
+    <div className="flex-shrink-0 px-4 pb-4 pt-3">
+      <div className={`rounded-xl border transition-colors ${editingMessage ? "border-amber-700/60 bg-zinc-800" : "border-zinc-700 bg-zinc-800 focus-within:border-indigo-600/70"}`}>
+        <textarea
+          value={text}
+          ref={textareaRef}
+          onChange={(e) => { setText(e.target.value); handleTyping(); }}
+          onKeyDown={handleKeyDown}
+          placeholder={editingMessage ? "Edit your message…" : `Message #hub-${numericHubId}`}
+          className="w-full bg-transparent px-4 pt-3 pb-2 text-sm text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none min-h-[44px] max-h-36"
+          rows={2}
+        />
+        <div className="flex items-center justify-between px-3 pb-2.5">
+          <div className="flex items-center gap-1">
+            {/* Emoji */}
+            <div className="relative">
+              <ToolbarBtn ref={emojiButtonRef} icon={<Smile className="w-4 h-4" />} label="Emoji" onClick={() => setShowEmojiPicker((v) => !v)} active={showEmojiPicker} />
+              {showEmojiPicker && (
+                <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)} triggerRef={emojiButtonRef} />
               )}
             </div>
-
-            {/* Reply Preview */}
-            {replyTo && (
-              <div className="border-t border-gray-100 bg-gradient-to-r from-[#432dd7]/5 to-purple-500/5 p-3 flex-shrink-0">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#432dd7] to-purple-500 flex items-center justify-center">
-                      <Reply className="w-4 h-4 text-white" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        Replying to <span className="text-[#432dd7]">{replyTo.sender}</span>
-                      </div>
-                      <div className="text-sm text-gray-600 truncate max-w-md">
-                        {replyTo.content}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setReplyTo(null)}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <X className="w-5 h-5 text-gray-500" />
-                  </button>
-                </div>
-              </div>
+            {/* File */}
+            {!editingMessage && (
+              <>
+                <input type="file" ref={fileInputRef} onChange={(e) => setFile(e.target.files[0])} className="hidden" id="file-upload-input" />
+                <label htmlFor="file-upload-input" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/60 cursor-pointer transition-colors text-xs font-medium">
+                  <Paperclip className="w-4 h-4" />
+                  <span className="hidden sm:inline">Attach</span>
+                </label>
+              </>
             )}
-
-            {/* Message Input */}
-            <div className="border-t border-gray-100 p-4 flex-shrink-0">
-              <div className="relative flex items-center">
-                <textarea
-                  value={text}
-                  ref={textareaRef}
-                  onChange={(e) => {
-                    setText(e.target.value);
-                    handleTyping();
-                  }}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Type your message here..."
-                  className="flex-1 min-h-[70px] p-4 pr-24 rounded-2xl border-2 border-gray-200 focus:border-[#432dd7] focus:ring-2 focus:ring-[#432dd7]/20 focus:outline-none resize-none transition-all"
-                  rows="2"
-                />
-
-                <div className="absolute right-4 bottom-4 flex items-center gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={(e) => setFile(e.target.files[0])}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <label
-                    htmlFor="file-upload"
-                    className="p-2 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors"
-                    title="Attach file"
-                  >
-                    <Paperclip className="w-5 h-5 text-gray-600" />
-                  </label>
-
-                  {file && (
-                    <div className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-[#432dd7]/10 to-purple-500/10 rounded-lg">
-                      <File className="w-4 h-4 text-[#432dd7]" />
-                      <span className="text-sm text-gray-700 truncate max-w-[100px]">
-                        {file.name}
-                      </span>
-                      <button
-                        onClick={() => {
-                          setFile(null);
-                          if (fileInputRef.current) fileInputRef.current.value = '';
-                        }}
-                        className="ml-1"
-                      >
-                        <X className="w-4 h-4 text-gray-500 hover:text-gray-700" />
-                      </button>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={sendMessage}
-                    disabled={!text.trim() && !file}
-                    className="p-3 rounded-xl bg-gradient-to-r from-[#432dd7] to-purple-600 text-white hover:shadow-lg hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all"
-                    title="Send message"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between mt-3 text-sm text-gray-500">
-                <div className="flex items-center gap-4">
-<div className="relative">
-  <button
-    type="button"
-    onClick={() => setShowEmojiPicker((v) => !v)}
-    className="flex items-center gap-2 hover:text-gray-700 transition-colors"
-  >
-    <Smile className="w-4 h-4" />
-    <span className="hidden sm:inline">Emoji</span>
-  </button>
-
-  {showEmojiPicker && (
-    <EmojiPicker
-      onSelect={insertEmoji}
-      onClose={() => setShowEmojiPicker(false)}
-    />
-  )}
-</div>
-
-
-                  <button className="flex items-center gap-2 hover:text-gray-700 transition-colors">
-                    <ImageIcon className="w-4 h-4" />
-                    <span className="hidden sm:inline">Image</span>
-                  </button>
-                  <button className="flex items-center gap-2 hover:text-gray-700 transition-colors">
-                    <File className="w-4 h-4" />
-                    <span className="hidden sm:inline">File</span>
-                  </button>
-                </div>
-                <div className="text-xs sm:text-sm">
-                  Press <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">Enter</kbd> to send
-                </div>
-              </div>
-            </div>
           </div>
-        </div>
-      )}
 
-      {/* Scroll to Bottom Button */}
-      {!fullScreen && (
-        <button
-          onClick={scrollToBottom}
-          className="fixed bottom-8 right-8 w-12 h-12 rounded-full bg-gradient-to-r from-[#432dd7] to-purple-600 text-white shadow-2xl flex items-center justify-center hover:scale-110 transition-transform z-40"
-          title="Scroll to bottom"
-        >
-          <ChevronUp className="w-6 h-6 rotate-180" />
-        </button>
+          {/* File preview pill */}
+          {file && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-700 rounded-lg text-xs text-zinc-300">
+              <FileText className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="truncate max-w-[100px]">{file.name}</span>
+              <button onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
+                <X className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300" />
+              </button>
+            </div>
+          )}
+
+          {/* Send / Save */}
+          <button
+            onClick={sendMessage}
+            disabled={!text.trim() && !file}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+              editingMessage
+                ? "bg-amber-500 hover:bg-amber-400 text-white"
+                : "bg-indigo-600 hover:bg-indigo-500 text-white"
+            }`}
+          >
+            {editingMessage ? <><CheckCircle className="w-4 h-4" /> Save</> : <><Send className="w-4 h-4" /> Send</>}
+          </button>
+        </div>
+      </div>
+      <div className="mt-1.5 text-right text-[11px] text-zinc-700">
+        <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-600 border border-zinc-700">Enter</kbd> to {editingMessage ? "save" : "send"} &nbsp;·&nbsp;
+        <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-600 border border-zinc-700">Shift+Enter</kbd> newline
+      </div>
+    </div>
+  );
+
+  const MessagesList = () => (
+    <div ref={messagesContainerRef} className="flex-1 overflow-y-auto py-4 space-y-0.5 scroll-smooth">
+      {messages.length === 0 ? (
+        <div className="h-full flex flex-col items-center justify-center text-zinc-600 py-16">
+          <div className="w-16 h-16 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center mb-4">
+            <Hash className="w-8 h-8 text-zinc-600" />
+          </div>
+          <p className="text-base font-semibold text-zinc-500">No messages yet</p>
+          <p className="text-sm text-zinc-700 mt-1">Be the first to say something!</p>
+        </div>
+      ) : (
+        <>
+          {messages.map((msg) => (
+            <MessageItem
+              key={msg.id}
+              msg={msg}
+              parent={msg.parent_id ? messageMap[msg.parent_id] : null}
+              onReply={(m) => { setReplyTo(m); setEditingMessage(null); }}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              messageMap={messageMap}
+            />
+          ))}
+          <TypingIndicator typingUsers={typingUsers} />
+          <div ref={messagesEndRef} />
+        </>
       )}
     </div>
   );
+
+  const OnlineSidebar = ({ compact = false }) => (
+    <div className={compact ? "flex flex-col h-full" : ""}>
+      <div className={`${compact ? "px-4 py-3 border-b border-zinc-800" : "px-5 pt-5 pb-3"}`}>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+          <Circle className="w-2 h-2 fill-emerald-500 text-emerald-500" />
+          Online — {onlineUsers.length}
+        </h3>
+      </div>
+      <div className={`space-y-0.5 ${compact ? "flex-1 overflow-y-auto px-2 py-2" : "px-3 pb-3 mt-1"}`}>
+        {onlineUsers.length === 0 ? (
+          <div className="py-8 text-center text-zinc-600 text-xs">No one online</div>
+        ) : onlineUsers.map((user, idx) => (
+          <div key={user.username || idx} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-zinc-800 transition-colors group">
+            <div className="relative flex-shrink-0">
+              <Avatar user={user} size="sm" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-zinc-900" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-zinc-300 truncate">
+                {user.username}
+                {user.username === currentUsername && <span className="text-zinc-600 text-xs ml-1">(you)</span>}
+              </div>
+              <div className="text-[11px] text-emerald-600">Active now</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  /* ── CHAT PANEL (shared between normal/fullscreen) ── */
+  const ChatPanel = ({ sidebarCompact = false }) => (
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Messages */}
+      <div className="flex flex-col flex-1 min-h-0 min-w-0 relative">
+        <MessagesList />
+
+        {/* Scroll to bottom pill */}
+        {showScrollBtn && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-20 right-4 flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-300 text-xs font-medium px-3 py-1.5 rounded-full shadow-xl transition-all"
+          >
+            <ChevronDown className="w-3.5 h-3.5" /> New messages
+          </button>
+        )}
+
+        <EditBanner />
+        <ReplyBar />
+        <InputArea />
+      </div>
+
+      {/* Sidebar */}
+      <div className={`hidden lg:flex flex-col border-l border-zinc-800 bg-zinc-900 ${sidebarCompact ? "w-56" : "w-60"}`}>
+        <OnlineSidebar compact={sidebarCompact} />
+      </div>
+    </div>
+  );
+
+  /* ── RENDER ── */
+
+  // FULLSCREEN
+  if (fullScreen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col font-sans">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <Hash className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-zinc-100">Hub Chat</h1>
+              <p className="text-xs text-zinc-500">{onlineUsers.length} online · {messages.length} messages</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setFullScreen(false)} className="p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors" title="Exit fullscreen">
+              <Minimize2 className="w-4 h-4" />
+            </button>
+            <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+              Invite Members
+            </button>
+          </div>
+        </div>
+        <ChatPanel sidebarCompact />
+      </div>
+    );
+  }
+
+  // NORMAL
+  return (
+    <div className="min-h-screen bg-zinc-950 font-sans">
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* Page header */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-900/40">
+              <Hash className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-zinc-100">Hub Chat</h1>
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
+                <span className="flex items-center gap-1">
+                  <Circle className="w-1.5 h-1.5 fill-emerald-500 text-emerald-500" />
+                  {onlineUsers.length} online
+                </span>
+                <span>·</span>
+                <span>{messages.length} messages</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setFullScreen(true)} className="p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 border border-zinc-800 transition-colors" title="Fullscreen">
+              <Maximize2 className="w-4 h-4" />
+            </button>
+            <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-lg shadow-indigo-900/30">
+              Invite Members
+            </button>
+          </div>
+        </div>
+
+        {/* Chat box */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl" style={{ height: "calc(100vh - 140px)" }}>
+          {/* Chat header bar */}
+          <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 flex-shrink-0">
+            <div className="flex items-center gap-2 text-zinc-400">
+              <Hash className="w-4 h-4" />
+              <span className="text-sm font-semibold text-zinc-300">hub-{numericHubId}</span>
+            </div>
+            <TypingIndicator typingUsers={typingUsers} />
+          </div>
+
+          <ChatPanel />
+        </div>
+      </div>
+    </div>
+  );
 }
+
+/* ── Toolbar button helper ── */
+const ToolbarBtn = ({ icon, label, onClick, active, ref: _ref, ...rest }) => (
+  <button
+    ref={_ref}
+    onClick={onClick}
+    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+      active ? "text-indigo-400 bg-indigo-500/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/60"
+    }`}
+    {...rest}
+  >
+    {icon}
+    <span className="hidden sm:inline">{label}</span>
+  </button>
+);

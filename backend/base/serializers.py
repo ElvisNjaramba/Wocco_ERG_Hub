@@ -94,6 +94,9 @@ class MessageSerializer(serializers.ModelSerializer):
             "parent_id",
             "replies",  
             "timestamp",
+            "is_deleted",
+            "is_edited",
+            "edited_at",
         ]
 
     def get_media_url(self, obj):
@@ -123,6 +126,13 @@ class MessageSerializer(serializers.ModelSerializer):
                 else None
             ),
         }
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.is_deleted:
+            data["content"] = "🗑️ Message deleted"
+            data["media_url"] = None
+        return data
 
 
 class EventSerializer(serializers.ModelSerializer):

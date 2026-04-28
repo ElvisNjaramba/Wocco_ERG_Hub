@@ -204,6 +204,19 @@ class HubChatConsumer(AsyncWebsocketConsumer):
             "event": event["event"]
         }))
 
+    async def message_edit(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "message_edit",
+            "message": event["message"]
+        }))
+
+    async def message_delete(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "message_delete",
+            "message_id": event["message_id"]
+        }))
+
+
 
     @database_sync_to_async
     def is_approved_member(self):

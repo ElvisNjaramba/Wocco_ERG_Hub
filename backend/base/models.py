@@ -37,7 +37,10 @@ class Message(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
     media = models.FileField(upload_to="hub_media/", blank=True, null=True)
     audio = models.FileField(upload_to="hub_audio/", blank=True, null=True)
-
+    
+    is_deleted = models.BooleanField(default=False)
+    is_edited = models.BooleanField(default=False)
+    edited_at = models.DateTimeField(null=True, blank=True)
     def __str__(self):
         return f"{self.sender.username} @ {self.hub.name}"
 

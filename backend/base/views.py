@@ -433,6 +433,58 @@ class MessageViewSet(viewsets.ModelViewSet):
             },
         )
 
+    @action(detail=True, methods=["patch"])
+    def edit(self, request, pk=None):
+        message = self.get_object()
+
+        if message.sender != request.user:
+            raise PermissionDenied("You can only edit your own messages")
+
+        message.content = request.data.get("content", message.content)
+        message.is_edited = True
+        message.edited_at = timezone.now()
+        message.save()
+
+        # 🔥 broadcast edit
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"hub_{message.hub_id}",
+            {
+                "type": "message_edit",
+                "message": MessageSerializer(
+                    message, context={"request": request}
+                ).data,
+            },
+        )
+
+        return Response(MessageSerializer(message).data)
+    
+    @action(detail=True, methods=["delete"])
+    def delete_message(self, request, pk=None):
+        message = self.get_object()
+
+        if message.sender != request.user and message.hub.admin != request.user:
+            raise PermissionDenied("Not allowed")
+
+        message.is_deleted = True
+        message.content = None
+        message.media = None
+        message.audio = None
+        message.save()
+
+        # 🔥 broadcast delete
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"hub_{message.hub_id}",
+            {
+                "type": "message_delete",
+                "message_id": message.id,
+            },
+        )
+
+        return Response({"status": "deleted"})
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me(request):
